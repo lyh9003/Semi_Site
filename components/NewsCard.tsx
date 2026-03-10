@@ -24,9 +24,11 @@ export default function NewsCard({ news, compact }: NewsCardProps) {
       <div className="flex gap-3 items-start">
         {/* 왼쪽: 출처 + 날짜 */}
         <div className="shrink-0 w-20 sm:w-28 pt-0.5">
-          <span className="block text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md mb-1 truncate">
-            {news.company}
-          </span>
+          {news.company && news.company !== "정보 없음" && (
+            <span className="block text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md mb-1 truncate">
+              {news.company}
+            </span>
+          )}
           <span className="text-xs text-slate-400 whitespace-nowrap">{formattedDate}</span>
         </div>
 
