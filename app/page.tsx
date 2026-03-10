@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import NewsCard from "@/components/NewsCard";
+import StockChart from "@/components/StockChart";
 
 export const revalidate = 3600; // 1시간마다 재생성
 
@@ -66,6 +67,9 @@ export default async function HomePage() {
           </div>
         ))}
       </section>
+
+      {/* 주가 차트 */}
+      <StockChart />
 
       {/* 최신 뉴스 */}
       <section>
