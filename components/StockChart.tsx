@@ -60,21 +60,21 @@ export default function StockChart() {
   if (error) return null;
 
   return (
-    <section className="bg-white rounded-2xl border border-slate-200 p-6 mb-12">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+    <section className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 mb-12">
+      <div className="flex flex-col gap-2 mb-4">
         <h2 className="text-lg font-bold text-slate-800">📈 주요 반도체 주가</h2>
         {data ? (
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-wrap gap-x-5 gap-y-1">
             <PriceBadge name="삼성전자" data={data.samsung} />
             <PriceBadge name="SK하이닉스" data={data.hynix} />
           </div>
         ) : (
-          <div className="h-5 w-64 bg-slate-100 rounded animate-pulse" />
+          <div className="h-5 w-48 bg-slate-100 rounded animate-pulse" />
         )}
       </div>
 
       {data ? (
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={200}>
           <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <XAxis
               dataKey="date"
