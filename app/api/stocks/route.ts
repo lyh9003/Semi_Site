@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 const TICKERS = {
-  samsung: "005930.KS",
-  hynix: "000660.KS",
+  samsung: "000660.KS",
+  hynix: "005930.KS",
 };
 
 async function fetchStock(ticker: string) {
