@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import ReportCard from "@/components/ReportCard";
@@ -13,7 +13,7 @@ import type { User } from "@supabase/supabase-js";
 const POPULAR_KEYWORDS = ["메모리", "파운드리", "HBM", "반도체", "AI", "DRAM", "NAND"];
 const PAGE_SIZE = 12;
 
-export default function ReportsPage() {
+function ReportsContent() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -321,5 +321,13 @@ export default function ReportsPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={<div className="max-w-6xl mx-auto px-4 py-10"><p className="text-slate-400">로딩 중...</p></div>}>
+      <ReportsContent />
+    </Suspense>
   );
 }
