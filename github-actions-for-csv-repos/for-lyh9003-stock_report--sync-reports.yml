@@ -1,0 +1,32 @@
+# lyh9003/stock_report 레포의 .github/workflows/sync-reports.yml 에 넣으세요
+name: Sync Reports to DB
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'reports.csv'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Supabase sync
+        run: |
+          curl -s -o response.json -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.SYNC_SECRET }}" \
+            -d '{"type": "reports"}' \
+            https://zpfcxfzxqpprtcjmzosc.supabase.co/functions/v1/sync-csv \
+            > http_code.txt
+
+          HTTP_CODE=$(cat http_code.txt)
+          cat response.json
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Sync failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+          echo "Sync successful!"
