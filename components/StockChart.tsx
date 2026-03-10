@@ -91,7 +91,7 @@ export default function StockChart() {
               width={36}
             />
             <Tooltip
-              formatter={(v: number, name: string) => [`${v.toLocaleString()}원`, name]}
+              formatter={(v: unknown, name: unknown) => [`${Number(v).toLocaleString()}원`, String(name ?? "")]}
               contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
             />
             <Legend
