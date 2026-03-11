@@ -24,9 +24,12 @@ export default function RootLayout({
               <span className="text-xl font-bold text-blue-600">⬡</span>
               <span className="font-bold text-slate-700">SemiCon Weekly</span>
             </div>
-            <p className="text-sm text-slate-400">
-              © 2025 SemiCon Weekly. 반도체 산업의 인사이트를 전달합니다.
-            </p>
+            <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-sm text-slate-400">
+              <span>© 2025 SemiCon Weekly. 반도체 산업의 인사이트를 전달합니다.</span>
+              <a href="mailto:yh9003.lee@samsung.com" className="hover:text-slate-600 transition-colors">
+                yh9003.lee@samsung.com
+              </a>
+            </div>
           </div>
         </footer>
       </body>
