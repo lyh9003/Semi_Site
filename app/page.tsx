@@ -15,11 +15,11 @@ export default async function HomePage() {
     .order("date", { ascending: false })
     .limit(6);
 
-  const { data: reportCount } = await supabase
+  const { count: reportCount } = await supabase
     .from("stock_reports")
     .select("id", { count: "exact", head: true });
 
-  const { data: newsCount } = await supabase
+  const { count: newsCount } = await supabase
     .from("news")
     .select("id", { count: "exact", head: true });
 
@@ -57,8 +57,8 @@ export default async function HomePage() {
       {/* 통계 */}
       <section className="grid grid-cols-3 gap-3 mb-8 sm:mb-12">
         {[
-          { label: "수집된 뉴스", value: `${newsCount?.length ?? 0}+`, icon: "📰" },
-          { label: "증권 리포트", value: `${reportCount?.length ?? 0}+`, icon: "📊" },
+          { label: "수집된 뉴스", value: `${newsCount ?? 0}+`, icon: "📰" },
+          { label: "증권 리포트", value: `${reportCount ?? 0}+`, icon: "📊" },
           { label: "커버 키워드", value: "50+", icon: "🏷️" },
         ].map((stat) => (
           <div key={stat.label} className="bg-white rounded-xl border border-slate-200 p-3 sm:p-5 text-center">
