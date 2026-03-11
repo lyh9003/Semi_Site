@@ -25,19 +25,19 @@ export default function ReportCard({ report }: ReportCardProps) {
     : "";
 
   return (
-    <article className="bg-white rounded-xl border border-slate-200 px-4 py-4 hover:shadow-md transition-all">
+    <article className="bg-white rounded-xl border border-slate-200 px-5 py-5 hover:shadow-md transition-all">
       <span className="text-xs text-slate-400 mb-2 block">{formattedDate}</span>
 
-      <h3 className="font-semibold text-slate-800 mb-1 leading-snug text-sm sm:text-base">
+      <h3 className="font-semibold text-slate-800 mb-2 leading-snug text-sm sm:text-base">
         {report.title}
       </h3>
       {report.one_line_summary && (
-        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed line-clamp-2 mb-2">
+        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed mb-3">
           💡 {report.one_line_summary}
         </p>
       )}
       {keywords.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-3">
+        <div className="flex flex-wrap gap-1 mb-4">
           {keywords.slice(0, 3).map((kw) => (
             <KeywordBadge key={kw} keyword={kw} />
           ))}
