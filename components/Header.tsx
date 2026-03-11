@@ -71,32 +71,7 @@ export default function Header() {
           ))}
         </nav>
 
-        {/* 로그인/로그아웃 */}
-        <div className="flex items-center gap-3">
-          {loading ? (
-            <div className="w-20 h-8 bg-slate-100 rounded-lg animate-pulse" />
-          ) : user ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-500 hidden sm:block">
-                {user.user_metadata?.name ?? user.email?.split("@")[0]}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                로그아웃
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={handleLogin}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-yellow-400 hover:bg-yellow-500 rounded-lg transition-colors"
-            >
-              <span>🗨️</span>
-              <span>카카오 로그인</span>
-            </button>
-          )}
-        </div>
+        <div />
       </div>
 
       {/* 모바일 네비게이션 */}
