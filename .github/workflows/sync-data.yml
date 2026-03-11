@@ -16,7 +16,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install @supabase/supabase-js --no-save
 
       - name: Sync data to Supabase
         env:
