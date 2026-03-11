@@ -75,7 +75,7 @@ export default function StockChart() {
 
       {data ? (
         <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+          <LineChart data={chartData} margin={{ top: 4, right: 44, left: 0, bottom: 0 }}>
             <XAxis
               dataKey="date"
               tick={{ fontSize: 11, fill: "#94a3b8" }}
@@ -84,11 +84,21 @@ export default function StockChart() {
               interval="preserveStartEnd"
             />
             <YAxis
+              yAxisId="left"
               tickFormatter={formatPrice}
-              tick={{ fontSize: 11, fill: "#94a3b8" }}
+              tick={{ fontSize: 11, fill: "#2563eb" }}
               tickLine={false}
               axisLine={false}
               width={36}
+            />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              tickFormatter={formatPrice}
+              tick={{ fontSize: 11, fill: "#16a34a" }}
+              tickLine={false}
+              axisLine={false}
+              width={44}
             />
             <Tooltip
               formatter={(v: unknown, name: unknown) => [`${Number(v).toLocaleString()}원`, String(name ?? "")]}
@@ -100,6 +110,7 @@ export default function StockChart() {
               wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
             />
             <Line
+              yAxisId="left"
               type="monotone"
               dataKey="삼성전자"
               stroke="#2563eb"
@@ -108,6 +119,7 @@ export default function StockChart() {
               activeDot={{ r: 4 }}
             />
             <Line
+              yAxisId="right"
               type="monotone"
               dataKey="SK하이닉스"
               stroke="#16a34a"

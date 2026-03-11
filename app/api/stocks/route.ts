@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 const TICKERS = {
-  samsung: "000660.KS",
-  hynix: "005930.KS",
+  samsung: "005930.KS",
+  hynix: "000660.KS",
 };
 
 async function fetchStock(ticker: string) {
@@ -28,10 +28,9 @@ async function fetchStock(ticker: string) {
     .filter((d) => d.price !== null);
 
   const currentPrice: number = Math.round(meta.regularMarketPrice ?? 0);
-  const prevClose: number = Math.round(meta.chartPreviousClose ?? meta.previousClose ?? 0);
-  const change = prevClose ? ((currentPrice - prevClose) / prevClose) * 100 : 0;
+  const change: number = parseFloat((meta.regularMarketChangePercent ?? 0).toFixed(2));
 
-  return { history, currentPrice, change: parseFloat(change.toFixed(2)), currency: meta.currency };
+  return { history, currentPrice, change, currency: meta.currency };
 }
 
 export async function GET() {
