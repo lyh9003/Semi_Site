@@ -6,20 +6,28 @@ const TICKERS = {
 };
 
 async function fetchStock(ticker: string) {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1mo`;
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0" },
-    next: { revalidate: 1800 }, // 30분 캐시
-  });
-  if (!res.ok) throw new Error(`Failed to fetch ${ticker}`);
-  const json = await res.json();
-  const result = json.chart?.result?.[0];
-  if (!result) throw new Error(`No data for ${ticker}`);
+  const headers = { "User-Agent": "Mozilla/5.0" };
 
-  const meta = result.meta;
+  // 차트 히스토리(1개월)와 당일 시세(v7 quote)를 병렬 요청
+  const [chartRes, quoteRes] = await Promise.all([
+    fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1mo`,
+      { headers, next: { revalidate: 1800 } }
+    ),
+    fetch(
+      `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}`,
+      { headers, next: { revalidate: 300 } } // 5분 캐시 (당일 시세)
+    ),
+  ]);
+
+  if (!chartRes.ok) throw new Error(`Failed to fetch chart for ${ticker}`);
+  const chartJson = await chartRes.json();
+  const result = chartJson.chart?.result?.[0];
+  if (!result) throw new Error(`No chart data for ${ticker}`);
+
+  // 히스토리 구성
   const timestamps: number[] = result.timestamp ?? [];
   const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
-
   const history = timestamps
     .map((ts, i) => ({
       date: new Date(ts * 1000).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" }),
@@ -27,14 +35,32 @@ async function fetchStock(ticker: string) {
     }))
     .filter((d) => d.price !== null);
 
-  const rawPrice: number = meta.regularMarketPrice ?? 0;
-  const prevClose: number = meta.chartPreviousClose ?? meta.previousClose ?? 0;
-  const currentPrice: number = Math.round(rawPrice);
-  const change: number = prevClose
-    ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
-    : 0;
+  // 당일 시세: v7 quote API → regularMarketPreviousClose(전일 종가) 사용
+  let currentPrice: number;
+  let change: number;
+  const currency: string = result.meta.currency ?? "KRW";
 
-  return { history, currentPrice, change, currency: meta.currency };
+  if (quoteRes.ok) {
+    const quoteJson = await quoteRes.json();
+    const q = quoteJson.quoteResponse?.result?.[0];
+    if (q) {
+      currentPrice = Math.round(q.regularMarketPrice ?? result.meta.regularMarketPrice ?? 0);
+      const prevClose: number = q.regularMarketPreviousClose ?? 0;
+      change = prevClose
+        ? parseFloat(((q.regularMarketPrice - prevClose) / prevClose * 100).toFixed(2))
+        : 0;
+    } else {
+      // fallback: chart meta
+      currentPrice = Math.round(result.meta.regularMarketPrice ?? 0);
+      change = 0;
+    }
+  } else {
+    // fallback: chart meta
+    currentPrice = Math.round(result.meta.regularMarketPrice ?? 0);
+    change = 0;
+  }
+
+  return { history, currentPrice, change, currency };
 }
 
 export async function GET() {
