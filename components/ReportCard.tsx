@@ -32,8 +32,13 @@ export default function ReportCard({ report }: ReportCardProps) {
         {report.title}
       </h3>
       {report.one_line_summary && (
-        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed mb-3">
+        <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-2 font-medium">
           💡 {report.one_line_summary}
+        </p>
+      )}
+      {report.summary && (
+        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed whitespace-pre-line mb-3">
+          {report.summary}
         </p>
       )}
       {keywords.length > 0 && (
