@@ -90,10 +90,7 @@ export default function StockChart() {
               tickLine={false}
               axisLine={false}
               width={36}
-              domain={([min, max]: [number, number]) => {
-                const pad = (max - min) * 0.3 || max * 0.05;
-                return [Math.floor(min - pad), Math.ceil(max + pad)];
-              }}
+              domain={["auto", "auto"]}
             />
             <YAxis
               yAxisId="right"
@@ -103,10 +100,7 @@ export default function StockChart() {
               tickLine={false}
               axisLine={false}
               width={44}
-              domain={([min, max]: [number, number]) => {
-                const pad = (max - min) * 0.3 || max * 0.05;
-                return [Math.floor(min - pad), Math.ceil(max + pad)];
-              }}
+              domain={["auto", "auto"]}
             />
             <Tooltip
               formatter={(v: unknown, name: unknown) => [`${Number(v).toLocaleString()}원`, String(name ?? "")]}
