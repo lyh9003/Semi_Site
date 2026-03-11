@@ -42,6 +42,7 @@ export default function Header() {
     { href: "/", label: "홈" },
     { href: "/news", label: "뉴스" },
     { href: "/reports", label: "증권 리포트" },
+    { href: "/telegram", label: "텔레그램" },
   ];
 
   return (

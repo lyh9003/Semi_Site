@@ -138,8 +138,55 @@ async function importReports() {
   console.log("리포트 임포트 완료!");
 }
 
+async function importTelegram() {
+  console.log("텔레그램 메시지 임포트 시작...");
+  const TELEGRAM_URL = "https://raw.githubusercontent.com/lyh9003/telegram/main/telegram_semiconductor_messages.csv";
+
+  const response = await fetch(TELEGRAM_URL);
+  const text = await response.text();
+  const allRows = parseCSV(text.replace(/^\uFEFF/, ""));
+  const headers = allRows[0];
+  console.log("텔레그램 CSV 헤더:", headers);
+
+  const headerMap = {};
+  headers.forEach((h, i) => { headerMap[h] = i; });
+  const col = (values, name) => values[headerMap[name]] ?? null;
+
+  const rows = [];
+  for (let i = 1; i < allRows.length; i++) {
+    const values = allRows[i];
+    if (values.length < 2) continue;
+    const normalized = col(values, "normalized_text");
+    if (!normalized) continue;
+    rows.push({
+      channel: col(values, "channel"),
+      sender_id: col(values, "sender_id"),
+      date_utc: col(values, "date_utc") || null,
+      date_local: col(values, "date_local"),
+      labels: col(values, "labels"),
+      message: col(values, "message"),
+      normalized_text: normalized,
+      message_length: parseInt(col(values, "message_length"), 10) || null,
+      summary: col(values, "summary"),
+      keywords: col(values, "keywords"),
+      sentiment: col(values, "sentiment"),
+    });
+  }
+
+  console.log(`총 ${rows.length}개 텔레그램 메시지 삽입 중...`);
+  const BATCH = 100;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const batch = rows.slice(i, i + BATCH);
+    const { error } = await supabase.from("telegram_messages").upsert(batch, { onConflict: "normalized_text", ignoreDuplicates: true });
+    if (error) console.error(`텔레그램 배치 ${i}~${i + BATCH} 오류:`, error.message);
+    else console.log(`텔레그램 ${i + batch.length}/${rows.length} 완료`);
+  }
+  console.log("텔레그램 임포트 완료!");
+}
+
 (async () => {
   await importNews();
   await importReports();
+  await importTelegram();
   console.log("모든 데이터 임포트 완료!");
 })();

@@ -27,6 +27,21 @@ export interface StockReport {
   file_size: string;
 }
 
+export interface TelegramMessage {
+  id: number;
+  channel: string;
+  sender_id: string;
+  date_utc: string;
+  date_local: string;
+  labels: string;
+  message: string;
+  normalized_text: string;
+  message_length: number;
+  summary: string;
+  keywords: string;
+  sentiment: string;
+}
+
 export interface Subscription {
   id: number;
   user_id: string;
