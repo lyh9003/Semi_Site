@@ -7,6 +7,7 @@ import KeywordBadge from "@/components/KeywordBadge";
 import type { StockReport } from "@/lib/types";
 
 const POPULAR_KEYWORDS = ["메모리", "파운드리", "HBM", "반도체", "AI", "DRAM", "NAND"];
+const SOURCE_FILTERS = ["삼성전자", "SK하이닉스", "반도체 업종"];
 const PAGE_SIZE = 12;
 
 function ReportsContent() {
@@ -16,6 +17,7 @@ function ReportsContent() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedKeyword, setSelectedKeyword] = useState("");
+  const [selectedSource, setSelectedSource] = useState("");
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -33,12 +35,15 @@ function ReportsContent() {
     if (selectedKeyword) {
       query = query.ilike("keyword", `%${selectedKeyword}%`);
     }
+    if (selectedSource) {
+      query = query.eq("source", selectedSource);
+    }
 
     const { data, count } = await query;
     setReports(data ?? []);
     setTotalCount(count ?? 0);
     setLoading(false);
-  }, [page, search, selectedKeyword]);
+  }, [page, search, selectedKeyword, selectedSource]);
 
   useEffect(() => {
     fetchReports();
@@ -49,6 +54,22 @@ function ReportsContent() {
   const handleKeywordClick = (kw: string) => {
     setSelectedKeyword(prev => prev === kw ? "" : kw);
     setPage(1);
+  };
+
+  const handleSourceClick = (src: string) => {
+    setSelectedSource(prev => prev === src ? "" : src);
+    setPage(1);
+  };
+
+  const sourceColors: Record<string, string> = {
+    "삼성전자": "text-blue-700 bg-blue-50 border-blue-200",
+    "SK하이닉스": "text-orange-700 bg-orange-50 border-orange-200",
+    "반도체 업종": "text-green-700 bg-green-50 border-green-200",
+  };
+  const sourceActiveColors: Record<string, string> = {
+    "삼성전자": "bg-blue-600 text-white border-blue-600",
+    "SK하이닉스": "bg-orange-500 text-white border-orange-500",
+    "반도체 업종": "bg-green-600 text-white border-green-600",
   };
 
   return (
@@ -78,9 +99,35 @@ function ReportsContent() {
         </div>
       </form>
 
+      {/* 출처 필터 */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <span className="text-sm text-slate-400 mr-1 self-center">출처:</span>
+        {SOURCE_FILTERS.map((src) => (
+          <button
+            key={src}
+            onClick={() => handleSourceClick(src)}
+            className={`text-xs font-semibold px-3 py-1 rounded-full border transition-colors ${
+              selectedSource === src
+                ? sourceActiveColors[src]
+                : sourceColors[src]
+            }`}
+          >
+            {src}
+          </button>
+        ))}
+        {selectedSource && (
+          <button
+            onClick={() => { setSelectedSource(""); setPage(1); }}
+            className="text-xs text-slate-400 hover:text-slate-600 underline"
+          >
+            해제
+          </button>
+        )}
+      </div>
+
       {/* 키워드 필터 */}
       <div className="flex flex-wrap gap-2 mb-8">
-        <span className="text-sm text-slate-400 mr-1 self-center">필터:</span>
+        <span className="text-sm text-slate-400 mr-1 self-center">키워드:</span>
         {POPULAR_KEYWORDS.map((kw) => (
           <KeywordBadge
             key={kw}
@@ -94,7 +141,7 @@ function ReportsContent() {
             onClick={() => { setSelectedKeyword(""); setPage(1); }}
             className="text-xs text-slate-400 hover:text-slate-600 underline"
           >
-            필터 해제
+            해제
           </button>
         )}
       </div>

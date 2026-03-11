@@ -58,6 +58,22 @@ export default function ReportCard({ report }: ReportCardProps) {
         >
           <span>📄</span><span>다운로드</span>
         </a>
+        {report.source && (
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${
+            report.source === "삼성전자"
+              ? "text-blue-700 bg-blue-50"
+              : report.source === "SK하이닉스"
+              ? "text-orange-700 bg-orange-50"
+              : "text-green-700 bg-green-50"
+          }`}>
+            {report.source}
+          </span>
+        )}
+        {report.target_price && (
+          <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-md">
+            목표주가 {Number(report.target_price).toLocaleString()}원
+          </span>
+        )}
         {report.securities_firm && (
           <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md">
             {report.securities_firm}

@@ -14,8 +14,10 @@ export interface News {
 export interface StockReport {
   id: number;
   date: string;
+  source: string;
   securities_firm: string;
   title: string;
+  target_price: string | null;
   content: string;
   summary: string;
   one_line_summary: string;

@@ -101,20 +101,27 @@ async function importReports() {
   const headers = allRows[0];
   console.log("리포트 CSV 헤더:", headers);
 
+  // 헤더 기반 매핑 (칼럼 추가에 유연하게 대응)
+  const headerMap = {};
+  headers.forEach((h, i) => { headerMap[h] = i; });
+  const col = (values, name) => values[headerMap[name]] || null;
+
   const rows = [];
   for (let i = 1; i < allRows.length; i++) {
     const values = allRows[i];
     if (values.length < 2) continue;
     rows.push({
-      date: values[0] || null,
-      securities_firm: values[1] || null,
-      title: values[2] || null,
-      content: values[3] || null,
-      summary: values[4] || null,
-      one_line_summary: values[5] || null,
-      keyword: values[6] || null,
-      link: values[7] || null,
-      file_size: values[8] || null,
+      date: col(values, "날짜"),
+      source: col(values, "출처"),
+      securities_firm: col(values, "증권사"),
+      title: col(values, "레포트제목"),
+      target_price: col(values, "목표주가"),
+      content: col(values, "레포트본문전체"),
+      summary: col(values, "전체요약"),
+      one_line_summary: col(values, "1줄 요약"),
+      keyword: col(values, "키워드"),
+      link: col(values, "link"),
+      file_size: col(values, "파일크기"),
     });
   }
 
@@ -122,7 +129,7 @@ async function importReports() {
   const BATCH = 50;
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
-    const { error } = await supabase.from("stock_reports").upsert(batch, { onConflict: "link", ignoreDuplicates: true });
+    const { error } = await supabase.from("stock_reports").upsert(batch, { onConflict: "link", ignoreDuplicates: false });
     if (error) console.error(`리포트 배치 ${i}~${i + BATCH} 오류:`, error.message);
     else console.log(`리포트 ${i + batch.length}/${rows.length} 완료`);
   }
