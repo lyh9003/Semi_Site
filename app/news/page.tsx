@@ -9,12 +9,20 @@ import type { News } from "@/lib/types";
 const POPULAR_KEYWORDS = ["메모리", "파운드리", "HBM", "반도체", "AI", "삼성전자", "SK하이닉스", "TSMC"];
 const PAGE_SIZE = 12;
 
+const IMPORTANCE_FILTERS = [
+  { value: 0, label: "전체" },
+  { value: 3, label: "🔴 상" },
+  { value: 2, label: "🟡 중" },
+  { value: 1, label: "⚪ 하" },
+] as const;
+
 export default function NewsPage() {
   const supabase = createClient();
   const [news, setNews] = useState<News[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedKeyword, setSelectedKeyword] = useState("");
+  const [selectedImportance, setSelectedImportance] = useState(0);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -24,6 +32,7 @@ export default function NewsPage() {
       .from("news")
       .select("*", { count: "exact" })
       .order("date", { ascending: false })
+      .order("importance", { ascending: false })
       .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
     if (search.trim()) {
@@ -32,12 +41,15 @@ export default function NewsPage() {
     if (selectedKeyword) {
       query = query.ilike("keyword", `%${selectedKeyword}%`);
     }
+    if (selectedImportance > 0) {
+      query = query.eq("importance", selectedImportance);
+    }
 
     const { data, count } = await query;
     setNews(data ?? []);
     setTotalCount(count ?? 0);
     setLoading(false);
-  }, [page, search, selectedKeyword]);
+  }, [page, search, selectedKeyword, selectedImportance]);
 
   useEffect(() => {
     fetchNews();
@@ -82,6 +94,24 @@ export default function NewsPage() {
           </button>
         </div>
       </form>
+
+      {/* 중요도 필터 */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-sm text-slate-400 mr-1">중요도:</span>
+        {IMPORTANCE_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => { setSelectedImportance(f.value); setPage(1); }}
+            className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-colors border ${
+              selectedImportance === f.value
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
 
       {/* 키워드 필터 */}
       <div className="flex flex-wrap gap-2 mb-8">

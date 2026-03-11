@@ -9,6 +9,7 @@ export interface News {
   keyword: string;
   summary: string;
   search_term: string;
+  importance: number;
 }
 
 export interface StockReport {

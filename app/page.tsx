@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import NewsCard from "@/components/NewsCard";
+import ReportCard from "@/components/ReportCard";
 import StockChart from "@/components/StockChart";
 import RelativeChart from "@/components/RelativeChart";
 
@@ -12,12 +13,20 @@ export default async function HomePage() {
   const { data: latestNews } = await supabase
     .from("news")
     .select("*")
+    .eq("importance", 3)
     .order("date", { ascending: false })
     .limit(6);
 
   const { count: reportCount } = await supabase
     .from("stock_reports")
     .select("id", { count: "exact", head: true });
+
+  const { data: latestReport } = await supabase
+    .from("stock_reports")
+    .select("*")
+    .order("date", { ascending: false })
+    .limit(1)
+    .single();
 
   const { count: newsCount } = await supabase
     .from("news")
@@ -98,19 +107,22 @@ export default async function HomePage() {
         )}
       </section>
 
-      {/* 리포트 CTA */}
-      <section className="mt-10 sm:mt-12 bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 sm:p-8 text-white text-center">
-        <h2 className="text-xl sm:text-2xl font-bold mb-2">증권사 리포트도 확인하세요</h2>
-        <p className="text-blue-100 mb-5 text-sm sm:text-base">
-          하나증권, 미래에셋 등 주요 증권사의 반도체 분석 리포트를 제공합니다.<br className="hidden sm:block" />
-          누구나 무료로 열람 및 다운로드 가능합니다.
-        </p>
-        <Link
-          href="/reports"
-          className="inline-block px-6 py-3 bg-white text-blue-600 font-semibold rounded-xl hover:bg-blue-50 transition-colors"
-        >
-          리포트 보러가기 →
-        </Link>
+      {/* 최신 증권 리포트 */}
+      <section className="mt-10 sm:mt-12">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-800">최신 증권 리포트</h2>
+          <Link href="/reports" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+            전체 보기 →
+          </Link>
+        </div>
+        {latestReport ? (
+          <ReportCard report={latestReport} />
+        ) : (
+          <div className="text-center py-12 text-slate-400">
+            <p className="text-4xl mb-3">📭</p>
+            <p>아직 리포트가 없습니다.</p>
+          </div>
+        )}
       </section>
     </div>
   );

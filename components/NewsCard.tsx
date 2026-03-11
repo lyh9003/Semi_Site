@@ -6,6 +6,12 @@ interface NewsCardProps {
   compact?: boolean;
 }
 
+const IMPORTANCE_CONFIG = {
+  3: { label: "상", className: "bg-red-50 text-red-600 border border-red-200" },
+  2: { label: "중", className: "bg-amber-50 text-amber-600 border border-amber-200" },
+  1: { label: "하", className: "bg-slate-100 text-slate-400 border border-slate-200" },
+} as const;
+
 export default function NewsCard({ news, compact }: NewsCardProps) {
   const keywords = news.keyword
     ? news.keyword.split(/[,，\s]+/).filter(Boolean)
@@ -19,10 +25,16 @@ export default function NewsCard({ news, compact }: NewsCardProps) {
       })
     : "";
 
+  const importance = (news.importance ?? 1) as 1 | 2 | 3;
+  const imp = IMPORTANCE_CONFIG[importance] ?? IMPORTANCE_CONFIG[1];
+
   return (
     <article className="bg-white rounded-xl border border-slate-200 px-4 py-4 hover:shadow-md hover:border-blue-200 transition-all group">
-      {/* 상단: 출처 + 날짜 */}
+      {/* 상단: 중요도 + 출처 + 날짜 */}
       <div className="flex items-center gap-2 mb-2">
+        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${imp.className}`}>
+          {imp.label}
+        </span>
         {news.company && news.company !== "정보 없음" && (
           <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md truncate max-w-[8rem]">
             {news.company}

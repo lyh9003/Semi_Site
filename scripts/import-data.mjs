@@ -67,6 +67,7 @@ async function importNews() {
   for (let i = 1; i < allRows.length; i++) {
     const values = allRows[i];
     if (values.length < 2) continue;
+    const importanceRaw = values[9];
     rows.push({
       date: values[0] || null,
       title: values[1] || null,
@@ -77,6 +78,7 @@ async function importNews() {
       keyword: values[6] || null,
       summary: values[7] || null,
       search_term: values[8] || null,
+      importance: importanceRaw ? parseInt(importanceRaw, 10) || 1 : 1,
     });
   }
 
