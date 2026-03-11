@@ -103,7 +103,7 @@ export default async function HomePage() {
         <h2 className="text-xl sm:text-2xl font-bold mb-2">증권사 리포트도 확인하세요</h2>
         <p className="text-blue-100 mb-5 text-sm sm:text-base">
           하나증권, 미래에셋 등 주요 증권사의 반도체 분석 리포트를 제공합니다.<br className="hidden sm:block" />
-          로그인 후 열람, 구독 후 다운로드 가능합니다.
+          카카오 로그인 후 열람 및 다운로드 가능합니다.
         </p>
         <Link
           href="/reports"

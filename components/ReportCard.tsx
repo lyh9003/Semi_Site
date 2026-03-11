@@ -5,15 +5,13 @@ import KeywordBadge from "./KeywordBadge";
 
 interface ReportCardProps {
   report: StockReport;
-  hasSubscription: boolean;
-  onSubscribeClick: () => void;
 }
 
 function formatFileSize(size: string) {
   return size.replace(/(\d+)/g, (n) => Number(n).toLocaleString());
 }
 
-export default function ReportCard({ report, hasSubscription, onSubscribeClick }: ReportCardProps) {
+export default function ReportCard({ report }: ReportCardProps) {
   const keywords = report.keyword
     ? report.keyword.split(/[,，\s]+/).filter(Boolean)
     : [];
@@ -26,20 +24,10 @@ export default function ReportCard({ report, hasSubscription, onSubscribeClick }
       })
     : "";
 
-  const handleDownload = () => {
-    if (!hasSubscription) {
-      onSubscribeClick();
-      return;
-    }
-    window.open(report.link, "_blank", "noopener,noreferrer");
-  };
-
   return (
     <article className="bg-white rounded-xl border border-slate-200 px-4 py-4 hover:shadow-md transition-all">
-      {/* 상단: 날짜 */}
       <span className="text-xs text-slate-400 mb-2 block">{formattedDate}</span>
 
-      {/* 제목 + 요약 + 키워드 */}
       <h3 className="font-semibold text-slate-800 mb-1 leading-snug text-sm sm:text-base">
         {report.title}
       </h3>
@@ -56,22 +44,15 @@ export default function ReportCard({ report, hasSubscription, onSubscribeClick }
         </div>
       )}
 
-      {/* 하단: 다운로드 버튼 + 증권사 + 용량 */}
       <div className="flex items-center gap-2 flex-wrap">
-        <button
-          onClick={handleDownload}
-          className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-medium transition-colors shrink-0 ${
-            hasSubscription
-              ? "bg-blue-600 hover:bg-blue-700 text-white"
-              : "bg-slate-100 hover:bg-slate-200 text-slate-500 border border-slate-200"
-          }`}
+        <a
+          href={report.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors shrink-0"
         >
-          {hasSubscription ? (
-            <><span>📄</span><span>다운로드</span></>
-          ) : (
-            <><span>🔒</span><span>구독 후 다운로드</span></>
-          )}
-        </button>
+          <span>📄</span><span>다운로드</span>
+        </a>
         {report.securities_firm && (
           <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md">
             {report.securities_firm}

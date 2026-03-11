@@ -1,12 +1,10 @@
 "use client";
 
 import { Suspense, useState, useEffect, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import ReportCard from "@/components/ReportCard";
 import KeywordBadge from "@/components/KeywordBadge";
 import LoginModal from "@/components/LoginModal";
-import SubscribeModal from "@/components/SubscribeModal";
 import type { StockReport } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
 
@@ -15,13 +13,10 @@ const PAGE_SIZE = 12;
 
 function ReportsContent() {
   const supabase = createClient();
-  const searchParams = useSearchParams();
-  const router = useRouter();
 
   const [reports, setReports] = useState<StockReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
-  const [hasSubscription, setHasSubscription] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
 
   const [search, setSearch] = useState("");
@@ -30,52 +25,25 @@ function ReportsContent() {
   const [totalCount, setTotalCount] = useState(0);
 
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showSubscribeModal, setShowSubscribeModal] = useState(false);
-
-  const checkSubscription = useCallback(async (userId: string) => {
-    const now = new Date().toISOString();
-    const { data: sub } = await supabase
-      .from("subscriptions")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("status", "active")
-      .gt("expires_at", now)
-      .maybeSingle();
-    setHasSubscription(!!sub);
-  }, []);
 
   // 인증 상태 체크
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
-      if (user) await checkSubscription(user.id);
       setAuthChecked(true);
     };
 
     checkAuth();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_e, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
-      if (!session?.user) setHasSubscription(false);
     });
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // 결제 완료 후 리다이렉트 시 구독 상태 즉시 재확인
-  useEffect(() => {
-    if (searchParams.get("payment") === "success") {
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (user) checkSubscription(user.id);
-      });
-      // URL에서 쿼리파라미터 제거
-      router.replace("/reports", { scroll: false });
-    }
-  }, [searchParams]);
-
   const fetchReports = useCallback(async () => {
-    if (!authChecked) return;
-    if (!user) {
+    if (!authChecked || !user) {
       setLoading(false);
       return;
     }
@@ -120,7 +88,7 @@ function ReportsContent() {
           <p className="text-slate-500">주요 증권사의 반도체 분석 리포트를 제공합니다.</p>
         </div>
 
-        {/* 흐릿한 미리보기 카드 */}
+        {/* 흐릿한 미리보기 */}
         <div className="relative">
           <div className="flex flex-col gap-3 blur-sm pointer-events-none select-none">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -138,13 +106,12 @@ function ReportsContent() {
             ))}
           </div>
 
-          {/* 오버레이 */}
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="bg-white rounded-2xl shadow-xl p-8 max-w-sm w-full mx-4 text-center">
               <div className="text-5xl mb-4">🔐</div>
               <h2 className="text-xl font-bold text-slate-800 mb-2">로그인이 필요합니다</h2>
               <p className="text-sm text-slate-500 mb-6">
-                증권 리포트는 카카오 로그인 후 열람 가능합니다.
+                증권 리포트는 카카오 로그인 후 열람 및 다운로드 가능합니다.
               </p>
               <button
                 onClick={() => setShowLoginModal(true)}
@@ -166,31 +133,8 @@ function ReportsContent() {
     <div className="max-w-6xl mx-auto px-4 py-10">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-800 mb-2">증권 리포트</h1>
-        <p className="text-slate-500">
-          주요 증권사의 반도체 분석 리포트를 제공합니다.
-          {!hasSubscription && (
-            <span className="ml-2 text-amber-600 font-medium">
-              다운로드는 구독 후 가능합니다.
-            </span>
-          )}
-        </p>
+        <p className="text-slate-500">주요 증권사의 반도체 분석 리포트를 제공합니다.</p>
       </div>
-
-      {/* 구독 상태 배너 */}
-      {!hasSubscription && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-4">
-          <div>
-            <p className="font-semibold text-amber-800">📊 리포트 다운로드는 구독 회원 전용입니다</p>
-            <p className="text-sm text-amber-600">월 9,900원으로 모든 리포트를 무제한 다운로드하세요.</p>
-          </div>
-          <button
-            onClick={() => setShowSubscribeModal(true)}
-            className="shrink-0 px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-slate-800 font-semibold text-sm rounded-lg transition-colors"
-          >
-            구독하기
-          </button>
-        </div>
-      )}
 
       {/* 검색 */}
       <form onSubmit={(e) => { e.preventDefault(); setPage(1); fetchReports(); }} className="mb-5">
@@ -239,7 +183,7 @@ function ReportsContent() {
         </p>
       </div>
 
-      {/* 리포트 그리드 */}
+      {/* 리포트 목록 */}
       {loading ? (
         <div className="flex flex-col gap-3">
           {Array.from({ length: PAGE_SIZE }).map((_, i) => (
@@ -259,12 +203,7 @@ function ReportsContent() {
       ) : reports.length > 0 ? (
         <div className="flex flex-col gap-3">
           {reports.map((report) => (
-            <ReportCard
-              key={report.id}
-              report={report}
-              hasSubscription={hasSubscription}
-              onSubscribeClick={() => setShowSubscribeModal(true)}
-            />
+            <ReportCard key={report.id} report={report} />
           ))}
         </div>
       ) : (
@@ -312,14 +251,6 @@ function ReportsContent() {
       )}
 
       {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
-      {showSubscribeModal && user && (
-        <SubscribeModal
-          userId={user.id}
-          userEmail={user.email}
-          userName={user.user_metadata?.name}
-          onClose={() => setShowSubscribeModal(false)}
-        />
-      )}
     </div>
   );
 }
