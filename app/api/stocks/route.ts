@@ -6,28 +6,20 @@ const TICKERS = {
 };
 
 async function fetchStock(ticker: string) {
-  const headers = { "User-Agent": "Mozilla/5.0" };
+  const res = await fetch(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1mo`,
+    { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 300 } }
+  );
+  if (!res.ok) throw new Error(`Failed to fetch ${ticker}`);
+  const json = await res.json();
+  const result = json.chart?.result?.[0];
+  if (!result) throw new Error(`No data for ${ticker}`);
 
-  // 차트 히스토리(1개월)와 당일 시세(v7 quote)를 병렬 요청
-  const [chartRes, quoteRes] = await Promise.all([
-    fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1mo`,
-      { headers, next: { revalidate: 1800 } }
-    ),
-    fetch(
-      `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}`,
-      { headers, next: { revalidate: 300 } } // 5분 캐시 (당일 시세)
-    ),
-  ]);
-
-  if (!chartRes.ok) throw new Error(`Failed to fetch chart for ${ticker}`);
-  const chartJson = await chartRes.json();
-  const result = chartJson.chart?.result?.[0];
-  if (!result) throw new Error(`No chart data for ${ticker}`);
-
-  // 히스토리 구성
+  const meta = result.meta;
   const timestamps: number[] = result.timestamp ?? [];
   const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
+
+  // 히스토리 구성
   const history = timestamps
     .map((ts, i) => ({
       date: new Date(ts * 1000).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" }),
@@ -35,32 +27,33 @@ async function fetchStock(ticker: string) {
     }))
     .filter((d) => d.price !== null);
 
-  // 당일 시세: v7 quote API → regularMarketPreviousClose(전일 종가) 사용
-  let currentPrice: number;
-  let change: number;
-  const currency: string = result.meta.currency ?? "KRW";
+  // 유효한 (timestamp, close) 쌍만 추출
+  const validPoints = timestamps
+    .map((ts, i) => ({ ts, close: closes[i] }))
+    .filter((p): p is { ts: number; close: number } => p.close != null && p.close > 0);
 
-  if (quoteRes.ok) {
-    const quoteJson = await quoteRes.json();
-    const q = quoteJson.quoteResponse?.result?.[0];
-    if (q) {
-      currentPrice = Math.round(q.regularMarketPrice ?? result.meta.regularMarketPrice ?? 0);
-      const prevClose: number = q.regularMarketPreviousClose ?? 0;
-      change = prevClose
-        ? parseFloat(((q.regularMarketPrice - prevClose) / prevClose * 100).toFixed(2))
-        : 0;
+  const rawPrice: number = meta.regularMarketPrice ?? 0;
+  const currentPrice: number = Math.round(rawPrice);
+
+  // 마지막 바가 오늘이면(장 마감) 두 번째 마지막을 전일 종가로 사용
+  // 마지막 바가 어제면(장중) 마지막 바가 전일 종가
+  let prevClose = 0;
+  if (validPoints.length >= 1) {
+    const lastTs = validPoints[validPoints.length - 1].ts;
+    const lastDateUTC = new Date(lastTs * 1000).toISOString().slice(0, 10);
+    const todayUTC = new Date().toISOString().slice(0, 10);
+    if (lastDateUTC === todayUTC && validPoints.length >= 2) {
+      prevClose = validPoints[validPoints.length - 2].close;
     } else {
-      // fallback: chart meta
-      currentPrice = Math.round(result.meta.regularMarketPrice ?? 0);
-      change = 0;
+      prevClose = validPoints[validPoints.length - 1].close;
     }
-  } else {
-    // fallback: chart meta
-    currentPrice = Math.round(result.meta.regularMarketPrice ?? 0);
-    change = 0;
   }
 
-  return { history, currentPrice, change, currency };
+  const change = prevClose
+    ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
+    : 0;
+
+  return { history, currentPrice, change, currency: meta.currency ?? "KRW" };
 }
 
 export async function GET() {
