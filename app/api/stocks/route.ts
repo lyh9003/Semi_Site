@@ -27,8 +27,12 @@ async function fetchStock(ticker: string) {
     }))
     .filter((d) => d.price !== null);
 
-  const currentPrice: number = Math.round(meta.regularMarketPrice ?? 0);
-  const change: number = parseFloat((meta.regularMarketChangePercent ?? 0).toFixed(2));
+  const rawPrice: number = meta.regularMarketPrice ?? 0;
+  const prevClose: number = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+  const currentPrice: number = Math.round(rawPrice);
+  const change: number = prevClose
+    ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
+    : 0;
 
   return { history, currentPrice, change, currency: meta.currency };
 }
