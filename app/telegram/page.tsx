@@ -35,7 +35,6 @@ export default function TelegramPage() {
     supabase
       .from("telegram_messages")
       .select("channel")
-      .order("channel")
       .limit(5000)
       .then(({ data }) => {
         if (!data) return;
