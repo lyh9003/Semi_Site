@@ -8,22 +8,24 @@ import type { TelegramMessage } from "@/lib/types";
 const PAGE_SIZE = 15;
 
 const SENTIMENT_FILTERS = [
-  { value: "", label: "전체" },
   { value: "긍정", label: "🟢 긍정" },
   { value: "중립", label: "⚪ 중립" },
   { value: "부정", label: "🔴 부정" },
 ] as const;
+
+const ALL_SENTIMENTS = SENTIMENT_FILTERS.map((f) => f.value);
 
 export default function TelegramPage() {
   const supabase = createClient();
   const [messages, setMessages] = useState<TelegramMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selectedSentiment, setSelectedSentiment] = useState("");
+  const [selectedSentiments, setSelectedSentiments] = useState<string[]>([...ALL_SENTIMENTS]);
   const [selectedChannel, setSelectedChannel] = useState("");
   const [channels, setChannels] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [sortBy, setSortBy] = useState<"date" | "popular">("date");
 
   // 채널 목록 로드
   useEffect(() => {
@@ -42,14 +44,15 @@ export default function TelegramPage() {
     let query = supabase
       .from("telegram_messages")
       .select("*", { count: "exact" })
-      .order("date_utc", { ascending: false })
+      .order(sortBy === "popular" ? "forward_count" : "date_utc", { ascending: false })
+      .order(sortBy === "popular" ? "date_utc" : "forward_count", { ascending: false })
       .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
     if (search.trim()) {
       query = query.or(`summary.ilike.%${search}%,message.ilike.%${search}%,keywords.ilike.%${search}%`);
     }
-    if (selectedSentiment) {
-      query = query.or(`sentiment.ilike.%${selectedSentiment}%`);
+    if (selectedSentiments.length > 0 && selectedSentiments.length < ALL_SENTIMENTS.length) {
+      query = query.or(selectedSentiments.map((s) => `sentiment.ilike.%${s}%`).join(","));
     }
     if (selectedChannel) {
       query = query.eq("channel", selectedChannel);
@@ -59,13 +62,20 @@ export default function TelegramPage() {
     setMessages(data ?? []);
     setTotalCount(count ?? 0);
     setLoading(false);
-  }, [page, search, selectedSentiment, selectedChannel]);
+  }, [page, search, selectedSentiments, selectedChannel, sortBy]);
 
   useEffect(() => {
     fetchMessages();
   }, [fetchMessages]);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  const toggleSentiment = (val: string) => {
+    setSelectedSentiments((prev) =>
+      prev.includes(val) ? prev.filter((v) => v !== val) : [...prev, val]
+    );
+    setPage(1);
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,9 +116,9 @@ export default function TelegramPage() {
         {SENTIMENT_FILTERS.map((f) => (
           <button
             key={f.value}
-            onClick={() => { setSelectedSentiment(f.value); setPage(1); }}
+            onClick={() => toggleSentiment(f.value)}
             className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-colors border ${
-              selectedSentiment === f.value
+              selectedSentiments.includes(f.value)
                 ? "bg-blue-600 text-white border-blue-600"
                 : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
             }`}
@@ -148,11 +158,26 @@ export default function TelegramPage() {
         </div>
       )}
 
-      {/* 결과 수 */}
-      <div className="mb-4">
+      {/* 정렬 + 결과 수 */}
+      <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-slate-500">
           총 <span className="font-semibold text-slate-700">{totalCount.toLocaleString()}</span>건
         </p>
+        <div className="flex gap-1">
+          {(["date", "popular"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => { setSortBy(s); setPage(1); }}
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors border ${
+                sortBy === s
+                  ? "bg-slate-700 text-white border-slate-700"
+                  : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              {s === "date" ? "최신순" : "🔁 인기순"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* 메시지 목록 */}

@@ -37,6 +37,8 @@ export interface TelegramMessage {
   message: string;
   normalized_text: string;
   message_length: number;
+  forward_count: number;
+  forward_channels: string;
   summary: string;
   keywords: string;
   sentiment: string;

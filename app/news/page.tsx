@@ -10,11 +10,12 @@ const POPULAR_KEYWORDS = ["메모리", "파운드리", "HBM", "반도체", "AI",
 const PAGE_SIZE = 12;
 
 const IMPORTANCE_FILTERS = [
-  { value: 0, label: "전체" },
   { value: 3, label: "🔴 상" },
   { value: 2, label: "🟡 중" },
   { value: 1, label: "⚪ 하" },
 ] as const;
+
+const ALL_IMPORTANCES = IMPORTANCE_FILTERS.map((f) => f.value);
 
 export default function NewsPage() {
   const supabase = createClient();
@@ -22,7 +23,7 @@ export default function NewsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedKeyword, setSelectedKeyword] = useState("");
-  const [selectedImportance, setSelectedImportance] = useState(0);
+  const [selectedImportances, setSelectedImportances] = useState<number[]>([...ALL_IMPORTANCES]);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -41,21 +42,28 @@ export default function NewsPage() {
     if (selectedKeyword) {
       query = query.ilike("keyword", `%${selectedKeyword}%`);
     }
-    if (selectedImportance > 0) {
-      query = query.eq("importance", selectedImportance);
+    if (selectedImportances.length > 0 && selectedImportances.length < ALL_IMPORTANCES.length) {
+      query = query.in("importance", selectedImportances);
     }
 
     const { data, count } = await query;
     setNews(data ?? []);
     setTotalCount(count ?? 0);
     setLoading(false);
-  }, [page, search, selectedKeyword, selectedImportance]);
+  }, [page, search, selectedKeyword, selectedImportances]);
 
   useEffect(() => {
     fetchNews();
   }, [fetchNews]);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  const toggleImportance = (val: number) => {
+    setSelectedImportances((prev) =>
+      prev.includes(val) ? prev.filter((v) => v !== val) : [...prev, val]
+    );
+    setPage(1);
+  };
 
   const handleKeywordClick = (kw: string) => {
     setSelectedKeyword(prev => prev === kw ? "" : kw);
@@ -101,9 +109,9 @@ export default function NewsPage() {
         {IMPORTANCE_FILTERS.map((f) => (
           <button
             key={f.value}
-            onClick={() => { setSelectedImportance(f.value); setPage(1); }}
+            onClick={() => toggleImportance(f.value)}
             className={`text-sm px-3 py-1.5 rounded-lg font-medium transition-colors border ${
-              selectedImportance === f.value
+              selectedImportances.includes(f.value)
                 ? "bg-blue-600 text-white border-blue-600"
                 : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
             }`}

@@ -171,6 +171,8 @@ async function importTelegram() {
       normalized_text: normalized,
       normalized_hash: md5(normalized),
       message_length: parseInt(col(values, "message_length"), 10) || null,
+      forward_count: parseInt(col(values, "forward_count"), 10) || 0,
+      forward_channels: col(values, "forward_channels"),
       summary: col(values, "summary"),
       keywords: col(values, "keywords"),
       sentiment: col(values, "sentiment"),
@@ -181,7 +183,7 @@ async function importTelegram() {
   const BATCH = 100;
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
-    const { error } = await supabase.from("telegram_messages").upsert(batch, { onConflict: "normalized_hash", ignoreDuplicates: true });
+    const { error } = await supabase.from("telegram_messages").upsert(batch, { onConflict: "normalized_hash", ignoreDuplicates: false });
     if (error) console.error(`텔레그램 배치 ${i}~${i + BATCH} 오류:`, error.message);
     else console.log(`텔레그램 ${i + batch.length}/${rows.length} 완료`);
   }

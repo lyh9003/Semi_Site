@@ -28,7 +28,7 @@ const PERIODS = [
 
 type Period = (typeof PERIODS)[number]["value"];
 
-const DEFAULT_SYMBOLS: Symbol[] = ["005930.KS", "000660.KS", "NVDA", "^SOX", "^IXIC"];
+const DEFAULT_SYMBOLS: Symbol[] = ["^KS11", "^IXIC", "005930.KS", "MU", "000660.KS"];
 
 type ChartRow = { date: string; [symbol: string]: number | string };
 

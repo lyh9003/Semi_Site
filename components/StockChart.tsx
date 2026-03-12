@@ -6,10 +6,13 @@ import {
   ResponsiveContainer, Legend,
 } from "recharts";
 
+type Range = "1mo" | "1y" | "2y";
+
 interface StockData {
   history: { date: string; price: number }[];
   currentPrice: number;
   change: number;
+  priceDate?: string | null;
 }
 
 interface StocksResponse {
@@ -34,25 +37,28 @@ function PriceBadge({ name, data }: { name: string; data: StockData }) {
 
 const formatPrice = (v: number) => `${(v / 1000).toFixed(0)}k`;
 
+const RANGE_LABELS: { value: Range; label: string }[] = [
+  { value: "1mo", label: "1개월" },
+  { value: "1y", label: "1년" },
+  { value: "2y", label: "2년" },
+];
+
 export default function StockChart() {
+  const [range, setRange] = useState<Range>("1mo");
   const [data, setData] = useState<StocksResponse | null>(null);
   const [error, setError] = useState(false);
-  const [fetchedAt, setFetchedAt] = useState<string>("");
 
   useEffect(() => {
-    fetch("/api/stocks")
+    setData(null);
+    fetch(`/api/stocks?range=${range}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.error) setError(true);
-        else {
-          setData(d);
-          setFetchedAt(new Date().toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" }));
-        }
+        else setData(d);
       })
       .catch(() => setError(true));
-  }, []);
+  }, [range]);
 
-  // samsung + hynix 히스토리 병합 (날짜 기준)
   const chartData = data
     ? data.samsung.history.map((s, i) => ({
         date: s.date,
@@ -65,16 +71,38 @@ export default function StockChart() {
 
   return (
     <section className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 mb-12">
-      <div className="flex flex-col gap-2 mb-4">
-        <h2 className="text-lg font-bold text-slate-800">📈 주요 반도체 주가{fetchedAt && <span className="text-sm font-normal text-slate-400 ml-1">({fetchedAt} 기준)</span>}</h2>
-        {data ? (
-          <div className="flex flex-wrap gap-x-5 gap-y-1">
-            <PriceBadge name="삼성전자" data={data.samsung} />
-            <PriceBadge name="SK하이닉스" data={data.hynix} />
-          </div>
-        ) : (
-          <div className="h-5 w-48 bg-slate-100 rounded animate-pulse" />
-        )}
+      <div className="flex items-start justify-between gap-2 mb-3 flex-wrap">
+        <div className="flex flex-col gap-1.5">
+          <h2 className="text-lg font-bold text-slate-800">
+            📈 주요 반도체 주가
+            {data?.samsung?.priceDate && (
+              <span className="text-sm font-normal text-slate-400 ml-1">({data.samsung.priceDate} 기준)</span>
+            )}
+          </h2>
+          {data ? (
+            <div className="flex flex-wrap gap-x-5 gap-y-1">
+              <PriceBadge name="삼성전자" data={data.samsung} />
+              <PriceBadge name="SK하이닉스" data={data.hynix} />
+            </div>
+          ) : (
+            <div className="h-5 w-48 bg-slate-100 rounded animate-pulse" />
+          )}
+        </div>
+        <div className="flex gap-1">
+          {RANGE_LABELS.map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => setRange(value)}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
+                range === value
+                  ? "bg-blue-600 text-white"
+                  : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {data ? (
@@ -140,7 +168,7 @@ export default function StockChart() {
       )}
 
       <p className="text-xs text-slate-400 mt-3 text-right">
-        출처: Yahoo Finance · 최근 1개월 종가 기준
+        출처: Yahoo Finance · 종가 기준
       </p>
     </section>
   );

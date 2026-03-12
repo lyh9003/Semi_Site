@@ -35,36 +35,38 @@ export default async function HomePage() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       {/* 히어로 섹션 */}
-      <section className="text-center py-10 sm:py-16 mb-8 sm:mb-12">
-        <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 text-xs sm:text-sm font-medium px-3 sm:px-4 py-2 rounded-full mb-5 border border-blue-100">
+      <section className="text-center pt-6 pb-4 mb-6">
+        <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 text-xs font-medium px-3 py-1.5 rounded-full mb-3 border border-blue-100">
           <span>⬡</span>
           <span>반도체 산업 전문 뉴스레터</span>
         </div>
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-800 mb-4 leading-tight">
-          반도체 시장의 모든 것,<br />
+        <h1 className="text-3xl sm:text-4xl font-bold text-slate-800 mb-4 leading-tight">
           <span className="text-blue-600">SemiCon Weekly</span>
         </h1>
-        <p className="text-base sm:text-lg text-slate-500 max-w-2xl mx-auto mb-7 px-2">
-          HBM, 메모리, 파운드리, AI 반도체까지 — 국내외 최신 뉴스와 증권사 리포트를 한 곳에서 확인하세요.
-        </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
             href="/news"
-            className="w-full sm:w-auto text-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
+            className="w-full sm:w-auto text-center px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
           >
             뉴스 보기 →
           </Link>
           <Link
             href="/reports"
-            className="w-full sm:w-auto text-center px-6 py-3 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 transition-colors"
+            className="w-full sm:w-auto text-center px-6 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 transition-colors"
           >
             증권 리포트 보기
+          </Link>
+          <Link
+            href="/telegram"
+            className="w-full sm:w-auto text-center px-6 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-xl border border-slate-200 transition-colors"
+          >
+            텔레그램 보기
           </Link>
         </div>
       </section>
 
       {/* 통계 */}
-      <section className="grid grid-cols-3 gap-3 mb-8 sm:mb-12">
+      <section className="grid grid-cols-3 gap-3 mb-6">
         {[
           { label: "수집된 뉴스", value: `${newsCount ?? 0}+`, icon: "📰" },
           { label: "증권 리포트", value: `${reportCount ?? 0}+`, icon: "📊" },
