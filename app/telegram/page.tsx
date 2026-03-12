@@ -30,11 +30,13 @@ export default function TelegramPage() {
 
   const CHANNELS_INITIAL_SHOW = 5;
 
-  // 채널 목록 로드
+  // 채널 목록 로드 (distinct 흉내: 채널별 1건씩 가져와 중복 제거)
   useEffect(() => {
     supabase
       .from("telegram_messages")
       .select("channel")
+      .order("channel")
+      .limit(5000)
       .then(({ data }) => {
         if (!data) return;
         const unique = [...new Set(data.map((r) => r.channel).filter(Boolean))].sort();
