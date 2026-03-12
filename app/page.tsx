@@ -83,11 +83,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* 메모리 판가 */}
-      {memoryPriceMsg && (
-        <MemoryPriceCard message={memoryPriceMsg.message} date_local={memoryPriceMsg.date_local} />
-      )}
-
       {/* 통계 */}
       <section className="grid grid-cols-3 gap-3 mb-6">
         {[
@@ -102,6 +97,11 @@ export default async function HomePage() {
           </div>
         ))}
       </section>
+
+      {/* 메모리 판가 */}
+      {memoryPriceMsg && (
+        <MemoryPriceCard message={memoryPriceMsg.message} date_local={memoryPriceMsg.date_local} />
+      )}
 
       {/* 주가 차트 */}
       <StockChart />
