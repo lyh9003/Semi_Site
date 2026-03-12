@@ -4,6 +4,7 @@ import NewsCard from "@/components/NewsCard";
 import ReportCard from "@/components/ReportCard";
 import StockChart from "@/components/StockChart";
 import RelativeChart from "@/components/RelativeChart";
+import TelegramCard from "@/components/TelegramCard";
 
 export const revalidate = 3600; // 1시간마다 재생성
 
@@ -31,6 +32,13 @@ export default async function HomePage() {
   const { count: newsCount } = await supabase
     .from("news")
     .select("id", { count: "exact", head: true });
+
+  const { data: latestTelegram } = await supabase
+    .from("telegram_messages")
+    .select("*")
+    .order("date_day", { ascending: false })
+    .order("forward_count", { ascending: false })
+    .limit(2);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -123,6 +131,28 @@ export default async function HomePage() {
           <div className="text-center py-12 text-slate-400">
             <p className="text-4xl mb-3">📭</p>
             <p>아직 리포트가 없습니다.</p>
+          </div>
+        )}
+      </section>
+
+      {/* 최신 텔레그램 이슈 */}
+      <section className="mt-10 sm:mt-12">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-800">최신 텔레그램 이슈</h2>
+          <Link href="/telegram" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+            전체 보기 →
+          </Link>
+        </div>
+        {latestTelegram && latestTelegram.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {latestTelegram.map((msg) => (
+              <TelegramCard key={msg.id} msg={msg} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 text-slate-400">
+            <p className="text-4xl mb-3">📭</p>
+            <p>아직 텔레그램 메시지가 없습니다.</p>
           </div>
         )}
       </section>
