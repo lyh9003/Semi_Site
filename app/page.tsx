@@ -39,14 +39,14 @@ export default async function HomePage() {
     .select("message, date_local")
     .eq("channel", "merITz_Tech")
     .ilike("message", "%메모리 스팟가격%")
-    .order("date_utc", { ascending: false })
+    .order("date_local", { ascending: false })
     .limit(1)
     .single();
 
   const { data: latestTelegram } = await supabase
     .from("telegram_messages")
     .select("*")
-    .order("date_day", { ascending: false })
+    .order("date_local_day", { ascending: false })
     .order("forward_count", { ascending: false })
     .limit(2);
 

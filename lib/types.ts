@@ -40,6 +40,7 @@ export interface TelegramMessage {
   forward_count: number;
   forward_channels: string;
   date_day: string;
+  date_local_day: string;
   summary: string;
   keywords: string;
   sentiment: string;

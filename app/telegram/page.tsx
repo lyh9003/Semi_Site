@@ -45,9 +45,9 @@ export default function TelegramPage() {
     let query = supabase
       .from("telegram_messages")
       .select("*", { count: "exact" })
-      .order(sortBy === "popular" ? "forward_count" : "date_day", { ascending: false })
+      .order(sortBy === "popular" ? "forward_count" : "date_local_day", { ascending: false })
       .order("forward_count", { ascending: false })
-      .order("date_utc", { ascending: false })
+      .order("date_local", { ascending: false })
       .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
     if (search.trim()) {
