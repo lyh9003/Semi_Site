@@ -41,7 +41,7 @@ export default function MemoryPriceCard({ message, date_local }: Props) {
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
           <span className="text-sm font-bold text-slate-700">메모리 스팟가격</span>
-          <span className="text-xs text-slate-400">{dateStr} · merITz_Tech</span>
+          <span className="text-xs text-slate-400">{dateStr} · DRAMeXchange</span>
         </div>
         <div className="divide-y divide-slate-100">
           {rows.map(({ label, data }) => (
