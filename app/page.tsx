@@ -5,6 +5,7 @@ import ReportCard from "@/components/ReportCard";
 import StockChart from "@/components/StockChart";
 import RelativeChart from "@/components/RelativeChart";
 import TelegramCard from "@/components/TelegramCard";
+import MemoryPriceCard from "@/components/MemoryPriceCard";
 
 export const revalidate = 3600; // 1시간마다 재생성
 
@@ -32,6 +33,15 @@ export default async function HomePage() {
   const { count: newsCount } = await supabase
     .from("news")
     .select("id", { count: "exact", head: true });
+
+  const { data: memoryPriceMsg } = await supabase
+    .from("telegram_messages")
+    .select("message, date_local")
+    .eq("channel", "merITz_Tech")
+    .ilike("message", "%메모리 스팟가격%")
+    .order("date_utc", { ascending: false })
+    .limit(1)
+    .single();
 
   const { data: latestTelegram } = await supabase
     .from("telegram_messages")
@@ -72,6 +82,11 @@ export default async function HomePage() {
           </Link>
         </div>
       </section>
+
+      {/* 메모리 판가 */}
+      {memoryPriceMsg && (
+        <MemoryPriceCard message={memoryPriceMsg.message} date_local={memoryPriceMsg.date_local} />
+      )}
 
       {/* 통계 */}
       <section className="grid grid-cols-3 gap-3 mb-6">
