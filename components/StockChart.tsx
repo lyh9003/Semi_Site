@@ -46,7 +46,7 @@ export default function StockChart() {
         if (d.error) setError(true);
         else {
           setData(d);
-          setFetchedAt(new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" }));
+          setFetchedAt(new Date().toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" }));
         }
       })
       .catch(() => setError(true));
