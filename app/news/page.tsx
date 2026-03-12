@@ -6,7 +6,12 @@ import NewsCard from "@/components/NewsCard";
 import KeywordBadge from "@/components/KeywordBadge";
 import type { News } from "@/lib/types";
 
-const POPULAR_KEYWORDS = ["메모리", "파운드리", "HBM", "반도체", "AI", "삼성전자", "SK하이닉스", "TSMC"];
+const POPULAR_KEYWORDS = [
+  "메모리", "파운드리", "HBM", "반도체", "AI", "삼성전자", "SK하이닉스", "TSMC",
+  "마이크론", "엔비디아", "인텔", "퀄컴", "ASML", "DRAM", "NAND", "DDR5",
+  "EUV", "CoWoS", "GAA", "전력반도체", "온디바이스", "자율주행",
+];
+const KEYWORDS_INITIAL_SHOW = 8;
 const PAGE_SIZE = 12;
 
 const IMPORTANCE_FILTERS = [
@@ -26,6 +31,7 @@ export default function NewsPage() {
   const [selectedImportances, setSelectedImportances] = useState<number[]>([...ALL_IMPORTANCES]);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [showAllKeywords, setShowAllKeywords] = useState(false);
 
   const fetchNews = useCallback(async () => {
     setLoading(true);
@@ -124,7 +130,7 @@ export default function NewsPage() {
       {/* 키워드 필터 */}
       <div className="flex flex-wrap gap-2 mb-8">
         <span className="text-sm text-slate-400 mr-1 self-center">필터:</span>
-        {POPULAR_KEYWORDS.map((kw) => (
+        {(showAllKeywords ? POPULAR_KEYWORDS : POPULAR_KEYWORDS.slice(0, KEYWORDS_INITIAL_SHOW)).map((kw) => (
           <KeywordBadge
             key={kw}
             keyword={kw}
@@ -132,10 +138,16 @@ export default function NewsPage() {
             active={selectedKeyword === kw}
           />
         ))}
+        <button
+          onClick={() => setShowAllKeywords(v => !v)}
+          className="text-xs text-slate-400 hover:text-slate-600 underline self-center"
+        >
+          {showAllKeywords ? "접기" : `+${POPULAR_KEYWORDS.length - KEYWORDS_INITIAL_SHOW} 더 보기`}
+        </button>
         {selectedKeyword && (
           <button
             onClick={() => { setSelectedKeyword(""); setPage(1); }}
-            className="text-xs text-slate-400 hover:text-slate-600 underline"
+            className="text-xs text-slate-400 hover:text-slate-600 underline self-center"
           >
             필터 해제
           </button>

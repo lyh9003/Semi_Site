@@ -6,7 +6,11 @@ import ReportCard from "@/components/ReportCard";
 import KeywordBadge from "@/components/KeywordBadge";
 import type { StockReport } from "@/lib/types";
 
-const POPULAR_KEYWORDS = ["메모리", "파운드리", "HBM", "반도체", "AI", "DRAM", "NAND"];
+const POPULAR_KEYWORDS = [
+  "메모리", "파운드리", "HBM", "반도체", "AI", "DRAM", "NAND",
+  "엔비디아", "TSMC", "마이크론", "DDR5", "CoWoS", "EUV", "GAA",
+];
+const KEYWORDS_INITIAL_SHOW = 7;
 const SOURCE_FILTERS = ["삼성전자", "SK하이닉스", "반도체 업종"];
 const PAGE_SIZE = 12;
 
@@ -20,6 +24,7 @@ function ReportsContent() {
   const [selectedSource, setSelectedSource] = useState("");
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [showAllKeywords, setShowAllKeywords] = useState(false);
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
@@ -128,7 +133,7 @@ function ReportsContent() {
       {/* 키워드 필터 */}
       <div className="flex flex-wrap gap-2 mb-8">
         <span className="text-sm text-slate-400 mr-1 self-center">키워드:</span>
-        {POPULAR_KEYWORDS.map((kw) => (
+        {(showAllKeywords ? POPULAR_KEYWORDS : POPULAR_KEYWORDS.slice(0, KEYWORDS_INITIAL_SHOW)).map((kw) => (
           <KeywordBadge
             key={kw}
             keyword={kw}
@@ -136,10 +141,16 @@ function ReportsContent() {
             active={selectedKeyword === kw}
           />
         ))}
+        <button
+          onClick={() => setShowAllKeywords(v => !v)}
+          className="text-xs text-slate-400 hover:text-slate-600 underline self-center"
+        >
+          {showAllKeywords ? "접기" : `+${POPULAR_KEYWORDS.length - KEYWORDS_INITIAL_SHOW} 더 보기`}
+        </button>
         {selectedKeyword && (
           <button
             onClick={() => { setSelectedKeyword(""); setPage(1); }}
-            className="text-xs text-slate-400 hover:text-slate-600 underline"
+            className="text-xs text-slate-400 hover:text-slate-600 underline self-center"
           >
             해제
           </button>

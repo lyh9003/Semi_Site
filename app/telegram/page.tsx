@@ -26,6 +26,9 @@ export default function TelegramPage() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [sortBy, setSortBy] = useState<"date" | "popular">("date");
+  const [showAllChannels, setShowAllChannels] = useState(false);
+
+  const CHANNELS_INITIAL_SHOW = 5;
 
   // 채널 목록 로드
   useEffect(() => {
@@ -143,7 +146,7 @@ export default function TelegramPage() {
           >
             전체
           </button>
-          {channels.map((ch) => (
+          {(showAllChannels ? channels : channels.slice(0, CHANNELS_INITIAL_SHOW)).map((ch) => (
             <button
               key={ch}
               onClick={() => { setSelectedChannel(ch); setPage(1); }}
@@ -156,6 +159,14 @@ export default function TelegramPage() {
               {ch}
             </button>
           ))}
+          {channels.length > CHANNELS_INITIAL_SHOW && (
+            <button
+              onClick={() => setShowAllChannels(v => !v)}
+              className="text-xs text-slate-400 hover:text-slate-600 underline"
+            >
+              {showAllChannels ? "접기" : `+${channels.length - CHANNELS_INITIAL_SHOW} 더 보기`}
+            </button>
+          )}
         </div>
       )}
 
