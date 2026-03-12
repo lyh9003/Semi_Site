@@ -49,7 +49,7 @@ export default function TelegramCard({ msg }: TelegramCardProps) {
       {msg.summary && (
         <div className="text-sm text-slate-700 leading-relaxed mb-2 font-medium">
           {msg.summary
-            .split(/(?=\d+[.)]\s)/)
+            .split(/(?<!\d)(?=\d+[.)]\s)/)
             .map((line, i) => line.trim())
             .filter(Boolean)
             .map((line, i) => (
