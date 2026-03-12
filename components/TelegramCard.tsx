@@ -44,9 +44,15 @@ export default function TelegramCard({ msg }: TelegramCardProps) {
 
       {/* 요약 */}
       {msg.summary && (
-        <p className="text-sm text-slate-700 leading-relaxed mb-2 font-medium">
-          {msg.summary}
-        </p>
+        <div className="text-sm text-slate-700 leading-relaxed mb-2 font-medium">
+          {msg.summary
+            .split(/(?=\d+[.)]\s)/)
+            .map((line, i) => line.trim())
+            .filter(Boolean)
+            .map((line, i) => (
+              <p key={i} className={i > 0 ? "mt-1" : ""}>{line}</p>
+            ))}
+        </div>
       )}
 
       {/* 원문 (접기) */}
