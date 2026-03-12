@@ -53,6 +53,9 @@ export default function Header() {
           <span className="text-2xl font-bold text-blue-600">⬡</span>
           <span className="text-xl font-bold text-slate-800">SemiCon</span>
           <span className="text-sm font-medium text-slate-400 hidden sm:block">Weekly</span>
+          {process.env.NEXT_PUBLIC_BUILD_TIME && (
+            <span className="text-xs text-slate-300 hidden sm:block">({process.env.NEXT_PUBLIC_BUILD_TIME} 배포)</span>
+          )}
         </Link>
 
         {/* 네비게이션 */}
