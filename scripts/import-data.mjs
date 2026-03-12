@@ -5,6 +5,9 @@
  * 먼저 .env.local 파일에 환경변수를 설정해야 합니다.
  */
 import { createClient } from "@supabase/supabase-js";
+import { createHash } from "crypto";
+
+const md5 = (str) => createHash("md5").update(str ?? "").digest("hex");
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; // service role key 필요
@@ -166,6 +169,7 @@ async function importTelegram() {
       labels: col(values, "labels"),
       message: col(values, "message"),
       normalized_text: normalized,
+      normalized_hash: md5(normalized),
       message_length: parseInt(col(values, "message_length"), 10) || null,
       summary: col(values, "summary"),
       keywords: col(values, "keywords"),
@@ -177,7 +181,7 @@ async function importTelegram() {
   const BATCH = 100;
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
-    const { error } = await supabase.from("telegram_messages").upsert(batch, { onConflict: "normalized_text", ignoreDuplicates: true });
+    const { error } = await supabase.from("telegram_messages").upsert(batch, { onConflict: "normalized_hash", ignoreDuplicates: true });
     if (error) console.error(`텔레그램 배치 ${i}~${i + BATCH} 오류:`, error.message);
     else console.log(`텔레그램 ${i + batch.length}/${rows.length} 완료`);
   }
