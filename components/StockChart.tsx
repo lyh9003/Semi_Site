@@ -37,13 +37,17 @@ const formatPrice = (v: number) => `${(v / 1000).toFixed(0)}k`;
 export default function StockChart() {
   const [data, setData] = useState<StocksResponse | null>(null);
   const [error, setError] = useState(false);
+  const [fetchedAt, setFetchedAt] = useState<string>("");
 
   useEffect(() => {
     fetch("/api/stocks")
       .then((r) => r.json())
       .then((d) => {
         if (d.error) setError(true);
-        else setData(d);
+        else {
+          setData(d);
+          setFetchedAt(new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" }));
+        }
       })
       .catch(() => setError(true));
   }, []);
@@ -62,7 +66,7 @@ export default function StockChart() {
   return (
     <section className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 mb-12">
       <div className="flex flex-col gap-2 mb-4">
-        <h2 className="text-lg font-bold text-slate-800">📈 주요 반도체 주가</h2>
+        <h2 className="text-lg font-bold text-slate-800">📈 주요 반도체 주가{fetchedAt && <span className="text-sm font-normal text-slate-400 ml-1">({fetchedAt} 기준)</span>}</h2>
         {data ? (
           <div className="flex flex-wrap gap-x-5 gap-y-1">
             <PriceBadge name="삼성전자" data={data.samsung} />
