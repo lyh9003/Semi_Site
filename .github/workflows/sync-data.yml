@@ -2,7 +2,7 @@ name: Sync CSV to Supabase
 
 on:
   schedule:
-    - cron: '0 1,13 * * *'  # 매일 01:00, 13:00 UTC (한국 10:00, 22:00)
+    - cron: '0 */3 * * *'  # 매일 3시간마다 동기화
   workflow_dispatch:         # 수동 실행도 가능
 
 jobs:
