@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "**.naver.com" },
       { protocol: "https", hostname: "**.kakao.com" },
+      { protocol: "https", hostname: "zpfcxfzxqpprtcjmzosc.supabase.co" },
     ],
   },
 };

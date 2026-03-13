@@ -6,6 +6,7 @@ import StockChart from "@/components/StockChart";
 import RelativeChart from "@/components/RelativeChart";
 import TelegramCard from "@/components/TelegramCard";
 import MemoryPriceCard from "@/components/MemoryPriceCard";
+import ChartImageSection from "@/components/ChartImageSection";
 
 export const revalidate = 3600; // 1시간마다 재생성
 
@@ -100,11 +101,20 @@ export default async function HomePage() {
 
       {/* 메모리 판가 */}
       {memoryPriceMsg && (
-        <MemoryPriceCard message={memoryPriceMsg.message} date_local={memoryPriceMsg.date_local} />
+        <section className="mb-6">
+          <MemoryPriceCard message={memoryPriceMsg.message} date_local={memoryPriceMsg.date_local} />
+        </section>
       )}
 
-      {/* 주가 차트 */}
-      <StockChart />
+      {/* 주가 차트 + 업로드 이미지 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start mb-6">
+        <div className="lg:col-span-2">
+          <StockChart />
+        </div>
+        <div className="lg:col-span-1">
+          <ChartImageSection />
+        </div>
+      </div>
 
       {/* 상대 수익률 차트 */}
       <RelativeChart />

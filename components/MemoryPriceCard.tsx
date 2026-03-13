@@ -37,30 +37,28 @@ export default function MemoryPriceCard({ message, date_local }: Props) {
   ].filter((r) => r.data !== null);
 
   return (
-    <section className="mb-6">
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
-          <span className="text-sm font-bold text-slate-700">메모리 스팟가격</span>
-          <span className="text-xs text-slate-400">{dateStr} · DRAMeXchange</span>
-        </div>
-        <div className="divide-y divide-slate-100">
-          {rows.map(({ label, data }) => (
-            <div key={label} className="flex items-center px-4 py-2.5 gap-3">
-              <span className="text-xs font-medium text-slate-600 w-32 shrink-0">{label}</span>
-              <div className="flex gap-4 text-xs">
-                <span className="text-slate-400 w-6">1D</span>
-                <PctBadge val={data!.d1} />
-                <span className="text-slate-300">|</span>
-                <span className="text-slate-400 w-6">1W</span>
-                <PctBadge val={data!.w1} />
-                <span className="text-slate-300">|</span>
-                <span className="text-slate-400 w-6">1M</span>
-                <PctBadge val={data!.m1} />
-              </div>
-            </div>
-          ))}
-        </div>
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden h-full">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
+        <span className="text-sm font-bold text-slate-700">메모리 스팟가격</span>
+        <span className="text-xs text-slate-400">{dateStr} · DRAMeXchange</span>
       </div>
-    </section>
+      <div className="divide-y divide-slate-100">
+        {rows.map(({ label, data }) => (
+          <div key={label} className="flex items-center px-4 py-2.5 gap-3">
+            <span className="text-xs font-medium text-slate-600 w-32 shrink-0">{label}</span>
+            <div className="flex gap-4 text-xs">
+              <span className="text-slate-400 w-6">1D</span>
+              <PctBadge val={data!.d1} />
+              <span className="text-slate-300">|</span>
+              <span className="text-slate-400 w-6">1W</span>
+              <PctBadge val={data!.w1} />
+              <span className="text-slate-300">|</span>
+              <span className="text-slate-400 w-6">1M</span>
+              <PctBadge val={data!.m1} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

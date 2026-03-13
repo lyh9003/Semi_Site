@@ -40,6 +40,7 @@ export default function NewsPage() {
       .select("*", { count: "exact" })
       .order("date", { ascending: false })
       .order("importance", { ascending: false })
+      .order("id", { ascending: false })
       .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
     if (search.trim()) {
