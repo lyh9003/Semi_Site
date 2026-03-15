@@ -52,7 +52,7 @@ export default function CheckoutPage() {
       const orderId = `semicon_${userIdRef.current.slice(0, 8)}_${Date.now()}`;
       await widgetsRef.current.requestPayment({
         orderId,
-        orderName: "SemiCon Weekly 월 구독권",
+        orderName: "Semicon Daily 월 구독권",
         successUrl: `${window.location.origin}/payment/success`,
         failUrl: `${window.location.origin}/payment/fail`,
       });
@@ -74,7 +74,7 @@ export default function CheckoutPage() {
       <h1 className="text-2xl font-bold text-slate-800 mb-6">구독 결제</h1>
 
       <div className="bg-blue-50 rounded-xl p-4 mb-6">
-        <p className="font-semibold text-blue-800">SemiCon Weekly 월 구독권</p>
+        <p className="font-semibold text-blue-800">Semicon Daily 월 구독권</p>
         <ul className="text-sm text-blue-700 mt-2 space-y-1">
           <li>• 모든 증권사 리포트 무제한 다운로드</li>
           <li>• 최신 반도체 분석 리포트 제공</li>

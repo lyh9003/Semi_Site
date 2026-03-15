@@ -3,7 +3,7 @@ import "./globals.css";
 import Header from "@/components/Header";
 
 export const metadata: Metadata = {
-  title: "SemiCon Weekly | 반도체 뉴스레터",
+  title: "Semicon Daily | 반도체 뉴스레터",
   description: "반도체 산업의 최신 뉴스와 증권 리포트를 한눈에. 국내외 반도체 기업 분석, AI 메모리, HBM, 파운드리 동향을 전달합니다.",
   keywords: ["반도체", "뉴스레터", "HBM", "메모리", "파운드리", "삼성전자", "SK하이닉스"],
 };
@@ -22,10 +22,10 @@ export default function RootLayout({
           <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <span className="text-xl font-bold text-blue-600">⬡</span>
-              <span className="font-bold text-slate-700">SemiCon Weekly</span>
+              <span className="font-bold text-slate-700">Semicon Daily</span>
             </div>
             <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-sm text-slate-400">
-              <span>© 2025 SemiCon Weekly. 반도체 산업의 인사이트를 전달합니다.</span>
+              <span>© 2025 Semicon Daily. 반도체 산업의 인사이트를 전달합니다.</span>
               <a href="mailto:yh9003.lee@samsung.com" className="hover:text-slate-600 transition-colors">
                 yh9003.lee@samsung.com
               </a>

@@ -60,7 +60,7 @@ export default async function HomePage() {
           <span>반도체 산업 전문 뉴스레터</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-800 mb-4 leading-tight">
-          <span className="text-blue-600">SemiCon Weekly</span>
+          <span className="text-blue-600">Semicon Daily</span>
         </h1>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
