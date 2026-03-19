@@ -43,7 +43,7 @@ export default function TelegramCard({ msg }: TelegramCardProps) {
           </span>
         )}
         <span className="text-xs font-semibold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
-          인기도 {msg.forward_count ?? 1} <span className="font-normal text-blue-400">(전달 {msg.forward_count ?? 1}회)</span>
+          인기도 {msg.forward_count ?? 1}
         </span>
         <span className="text-xs text-slate-400">{formattedDate}</span>
       </div>
