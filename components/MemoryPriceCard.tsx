@@ -22,7 +22,7 @@ function PctBadge({ val }: { val: string }) {
 }
 
 export default function MemoryPriceCard({ message, date_local }: Props) {
-  const ddr4 = parseRow(message, /DDR4 8Gb: 1D ([^,]+), 1W ([^,]+), 1M ([^)]+)/);
+  const ddr4 = parseRow(message, /DDR4 8Gb: 1D ([^,]+), 1W ([^,]+), 1M ([^\n)]+)/);
   const ddr5 = parseRow(message, /DDR5 16Gb: 1D ([^,]+), 1W ([^,]+), 1M ([^)]+)/);
   const nand = parseRow(message, /MLC 64Gb: 1D ([^,]+), 1W ([^,]+), 1M ([^)]+)/);
 
