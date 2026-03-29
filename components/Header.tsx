@@ -43,7 +43,9 @@ export default function Header() {
     { href: "/news", label: "뉴스" },
     { href: "/reports", label: "증권 리포트" },
     { href: "/telegram", label: "텔레그램" },
-  ];
+    { href: "/board", label: "아카이브" },
+    { href: "https://www.notion.so/321972ad561981d7be89c0e7551c0843", label: "Notion", external: true },
+  ] as { href: string; label: string; external?: boolean }[];
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
@@ -60,12 +62,14 @@ export default function Header() {
 
         {/* 네비게이션 */}
         <nav className="hidden md:flex items-center gap-1">
-          {navLinks.map(({ href, label }) => (
+          {navLinks.map(({ href, label, external }) => (
             <Link
               key={href}
               href={href}
+              target={external ? "_blank" : undefined}
+              rel={external ? "noopener noreferrer" : undefined}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname === href
+                !external && pathname === href
                   ? "bg-blue-50 text-blue-600"
                   : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
@@ -79,13 +83,15 @@ export default function Header() {
       </div>
 
       {/* 모바일 네비게이션 */}
-      <div className="md:hidden border-t border-slate-100 px-4 py-2 flex gap-1">
-        {navLinks.map(({ href, label }) => (
+      <div className="md:hidden border-t border-slate-100 px-4 py-2 flex gap-1 overflow-x-auto">
+        {navLinks.map(({ href, label, external }) => (
           <Link
             key={href}
             href={href}
-            className={`flex-1 text-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              pathname === href
+            target={external ? "_blank" : undefined}
+            rel={external ? "noopener noreferrer" : undefined}
+            className={`flex-shrink-0 text-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              !external && pathname === href
                 ? "bg-blue-50 text-blue-600"
                 : "text-slate-600 hover:bg-slate-50"
             }`}

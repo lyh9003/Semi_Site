@@ -46,6 +46,17 @@ export interface TelegramMessage {
   sentiment: string;
 }
 
+export interface BoardPost {
+  id: number;
+  title: string;
+  content: string;
+  author_email: string;
+  created_at: string;
+  updated_at: string;
+  views: number;
+  images: string[];
+}
+
 export interface Subscription {
   id: number;
   user_id: string;
