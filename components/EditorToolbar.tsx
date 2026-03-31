@@ -29,7 +29,7 @@ export default function EditorToolbar({ onImageClick, onAttachClick, uploading, 
   const colorRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-t-xl bg-slate-50 border-b-0 sticky top-0 z-20">
+    <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-t-xl bg-slate-50 border-b-0 sticky top-[105px] md:top-[64px] z-20">
       {/* 굵게 */}
       <button
         type="button"
