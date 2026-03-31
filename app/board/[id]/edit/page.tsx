@@ -24,6 +24,7 @@ export default function BoardEditPage() {
   const attachInputRef = useRef<HTMLInputElement>(null);
   const [checking, setChecking] = useState(true);
   const [title, setTitle] = useState("");
+  const [initialContent, setInitialContent] = useState("");
   const [uploading, setUploading] = useState(false);
   const [attachUploading, setAttachUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -39,15 +40,22 @@ export default function BoardEditPage() {
       fetch(`/api/board/${id}`)
         .then((r) => r.json())
         .then(({ data: post }) => {
-          if (post && editorRef.current) {
+          if (post) {
             setTitle(post.title);
-            editorRef.current.innerHTML = post.content ?? "";
+            setInitialContent(post.content ?? "");
             setAttachments(post.attachments ?? []);
           }
           setChecking(false);
         });
     });
   }, [id]);
+
+  // checking이 끝난 후 에디터 DOM이 마운트되면 초기 내용 주입
+  useEffect(() => {
+    if (!checking && editorRef.current && initialContent) {
+      editorRef.current.innerHTML = initialContent;
+    }
+  }, [checking]);
 
   const uploadImage = async (file: File): Promise<string | null> => {
     const formData = new FormData();
