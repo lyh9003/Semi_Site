@@ -15,7 +15,7 @@ interface PostRow {
   images: string[];
 }
 
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim();
 
 export default function BoardPage() {
   const router = useRouter();
