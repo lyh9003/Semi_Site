@@ -36,8 +36,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "지원하지 않는 파일 형식입니다." }, { status: 400 });
   }
 
-  const safeName = file.name.replace(/[^a-zA-Z0-9가-힣._-]/g, "_");
-  const path = `attachments/${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`;
+  // 저장 경로는 ASCII만 허용 — 표시 이름(file.name)은 별도 보존
+  const path = `attachments/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const bytes = await file.arrayBuffer();
 
   const service = getServiceClient();
