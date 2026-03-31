@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
+import FooterUserStatus from "@/components/FooterUserStatus";
 
 export const metadata: Metadata = {
   title: "Semicon Daily | 반도체 뉴스레터",
@@ -26,6 +27,7 @@ export default function RootLayout({
             </div>
             <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-sm text-slate-400">
               <span>© 2025 Semicon Daily. 반도체 산업의 인사이트를 전달합니다.</span>
+              <FooterUserStatus />
               <a href="mailto:yh9003.lee@samsung.com" className="hover:text-slate-600 transition-colors">
                 yh9003.lee@samsung.com
               </a>
