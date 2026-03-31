@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { BoardAttachment } from "@/lib/types";
+import EditorToolbar from "@/components/EditorToolbar";
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim();
 
@@ -65,11 +66,9 @@ export default function BoardEditPage() {
     const editor = editorRef.current;
     if (!editor) return;
     editor.focus();
-
     const img = document.createElement("img");
     img.src = url;
     img.style.cssText = "max-width:100%;border-radius:8px;margin:4px 0;display:block;";
-
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
       const range = sel.getRangeAt(0);
@@ -92,7 +91,6 @@ export default function BoardEditPage() {
       .filter((item) => item.type.startsWith("image/"))
       .map((item) => item.getAsFile())
       .filter((f): f is File => f !== null);
-
     if (imageFiles.length > 0) {
       e.preventDefault();
       setUploading(true);
@@ -149,13 +147,11 @@ export default function BoardEditPage() {
     }
     setSubmitting(true);
     setError("");
-
     const res = await fetch(`/api/board/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, content, attachments }),
     });
-
     if (res.ok) {
       router.push(`/board/${id}`);
     } else {
@@ -191,23 +187,15 @@ export default function BoardEditPage() {
           className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-800 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
 
-        {/* 에디터 툴바 */}
-        <div className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-t-xl bg-slate-50 border-b-0">
-          <button
-            type="button"
-            onClick={() => imageInputRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-          >
-            {uploading ? (
-              <><span className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin inline-block" /> 업로드 중</>
-            ) : (
-              <>🖼 이미지 삽입</>
-            )}
-          </button>
-          <span className="text-xs text-slate-400">또는 Ctrl+V로 붙여넣기</span>
-          <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageFileChange} />
-        </div>
+        <EditorToolbar
+          onImageClick={() => imageInputRef.current?.click()}
+          onAttachClick={() => attachInputRef.current?.click()}
+          uploading={uploading}
+          attachUploading={attachUploading}
+        />
+
+        <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageFileChange} />
+        <input ref={attachInputRef} type="file" multiple className="hidden" onChange={handleAttachFileChange} />
 
         {/* contenteditable 에디터 */}
         <div
@@ -216,35 +204,13 @@ export default function BoardEditPage() {
           suppressContentEditableWarning
           onPaste={handlePaste}
           data-placeholder="내용을 입력하세요"
-          className="w-full min-h-64 px-4 py-3 border border-slate-200 rounded-b-xl text-slate-800 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400"
+          className="w-full min-h-64 px-4 py-3 border border-slate-200 rounded-b-xl -mt-4 text-slate-800 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400"
         />
 
-        {/* 첨부파일 섹션 */}
-        <div className="border border-slate-200 rounded-xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-700">첨부파일</span>
-            <button
-              type="button"
-              onClick={() => attachInputRef.current?.click()}
-              disabled={attachUploading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-            >
-              {attachUploading ? (
-                <><span className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin inline-block" /> 업로드 중</>
-              ) : (
-                <>📎 파일 첨부</>
-              )}
-            </button>
-            <input
-              ref={attachInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={handleAttachFileChange}
-            />
-          </div>
-          <p className="text-xs text-slate-400">PDF, Word, Excel, PPT, HWP, 이미지, ZIP 등 지원</p>
-          {attachments.length > 0 && (
+        {/* 첨부파일 목록 */}
+        {attachments.length > 0 && (
+          <div className="border border-slate-200 rounded-xl p-4 space-y-2">
+            <p className="text-xs font-medium text-slate-500">첨부파일 ({attachments.length})</p>
             <ul className="space-y-2">
               {attachments.map((att, i) => (
                 <li key={i} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 text-sm">
@@ -260,8 +226,8 @@ export default function BoardEditPage() {
                 </li>
               ))}
             </ul>
-          )}
-        </div>
+          </div>
+        )}
 
         {error && <p className="text-red-500 text-sm">{error}</p>}
 
