@@ -4,24 +4,34 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import type { BoardAttachment } from "@/lib/types";
 
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim();
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
 
 export default function BoardEditPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const supabase = createClient();
   const editorRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
   const [checking, setChecking] = useState(true);
   const [title, setTitle] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [attachUploading, setAttachUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [attachments, setAttachments] = useState<BoardAttachment[]>([]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user || data.user.email !== ADMIN_EMAIL) {
+      if (!data.user || data.user.email?.trim() !== ADMIN_EMAIL) {
         router.replace("/board");
         return;
       }
@@ -31,13 +41,14 @@ export default function BoardEditPage() {
           if (post && editorRef.current) {
             setTitle(post.title);
             editorRef.current.innerHTML = post.content ?? "";
+            setAttachments(post.attachments ?? []);
           }
           setChecking(false);
         });
     });
   }, [id]);
 
-  const uploadFile = async (file: File): Promise<string | null> => {
+  const uploadImage = async (file: File): Promise<string | null> => {
     const formData = new FormData();
     formData.append("file", file);
     const res = await fetch("/api/board/upload", { method: "POST", body: formData });
@@ -86,23 +97,47 @@ export default function BoardEditPage() {
       e.preventDefault();
       setUploading(true);
       for (const file of imageFiles) {
-        const url = await uploadFile(file);
+        const url = await uploadImage(file);
         if (url) insertImageAtCursor(url);
       }
       setUploading(false);
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
     setUploading(true);
     for (const file of files) {
-      const url = await uploadFile(file);
+      const url = await uploadImage(file);
       if (url) insertImageAtCursor(url);
     }
     setUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  };
+
+  const handleAttachFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setAttachUploading(true);
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/board/upload-attachment", { method: "POST", body: formData });
+      if (res.ok) {
+        const { url, name, size } = await res.json();
+        setAttachments((prev) => [...prev, { url, name, size }]);
+      } else {
+        const { error: msg } = await res.json();
+        setError(msg ?? "파일 업로드에 실패했습니다.");
+      }
+    }
+    setAttachUploading(false);
+    if (attachInputRef.current) attachInputRef.current.value = "";
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -118,7 +153,7 @@ export default function BoardEditPage() {
     const res = await fetch(`/api/board/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, content }),
+      body: JSON.stringify({ title, content, attachments }),
     });
 
     if (res.ok) {
@@ -160,7 +195,7 @@ export default function BoardEditPage() {
         <div className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-t-xl bg-slate-50 border-b-0">
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => imageInputRef.current?.click()}
             disabled={uploading}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
           >
@@ -171,7 +206,7 @@ export default function BoardEditPage() {
             )}
           </button>
           <span className="text-xs text-slate-400">또는 Ctrl+V로 붙여넣기</span>
-          <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
+          <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageFileChange} />
         </div>
 
         {/* contenteditable 에디터 */}
@@ -184,6 +219,50 @@ export default function BoardEditPage() {
           className="w-full min-h-64 px-4 py-3 border border-slate-200 rounded-b-xl text-slate-800 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400"
         />
 
+        {/* 첨부파일 섹션 */}
+        <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-700">첨부파일</span>
+            <button
+              type="button"
+              onClick={() => attachInputRef.current?.click()}
+              disabled={attachUploading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            >
+              {attachUploading ? (
+                <><span className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin inline-block" /> 업로드 중</>
+              ) : (
+                <>📎 파일 첨부</>
+              )}
+            </button>
+            <input
+              ref={attachInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleAttachFileChange}
+            />
+          </div>
+          <p className="text-xs text-slate-400">PDF, Word, Excel, PPT, HWP, 이미지, ZIP 등 지원</p>
+          {attachments.length > 0 && (
+            <ul className="space-y-2">
+              {attachments.map((att, i) => (
+                <li key={i} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2 text-sm">
+                  <span className="text-slate-700 truncate flex-1">{att.name}</span>
+                  <span className="text-slate-400 text-xs ml-2 flex-shrink-0">{formatBytes(att.size)}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(i)}
+                    className="ml-3 text-slate-400 hover:text-red-500 transition-colors flex-shrink-0"
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         {error && <p className="text-red-500 text-sm">{error}</p>}
 
         <div className="flex gap-3 justify-end">
@@ -195,7 +274,7 @@ export default function BoardEditPage() {
           </Link>
           <button
             type="submit"
-            disabled={submitting || uploading}
+            disabled={submitting || uploading || attachUploading}
             className="px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors"
           >
             {submitting ? "저장 중..." : "저장"}

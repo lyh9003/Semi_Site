@@ -45,7 +45,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { title, content, images } = await req.json();
+  const { title, content, images, attachments } = await req.json();
 
   if (!title?.trim() || !content?.trim()) {
     return NextResponse.json({ error: "제목과 내용을 입력해주세요." }, { status: 400 });
@@ -54,7 +54,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const service = getServiceClient();
   const { data, error } = await service
     .from("board_posts")
-    .update({ title: title.trim(), content: content.trim(), images: images ?? [], updated_at: new Date().toISOString() })
+    .update({ title: title.trim(), content: content.trim(), images: images ?? [], attachments: attachments ?? [], updated_at: new Date().toISOString() })
     .eq("id", id)
     .select()
     .single();

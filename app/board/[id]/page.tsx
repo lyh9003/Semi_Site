@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import type { BoardPost } from "@/lib/types";
+import type { BoardPost, BoardAttachment } from "@/lib/types";
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
@@ -97,6 +97,32 @@ export default function BoardDetailPage() {
             }}
           />
         </div>
+
+        {/* 첨부파일 */}
+        {post.attachments?.length > 0 && (
+          <div className="px-6 pb-6 border-t border-slate-100 pt-4">
+            <p className="text-xs font-medium text-slate-500 mb-2">첨부파일 ({post.attachments.length})</p>
+            <ul className="space-y-2">
+              {post.attachments.map((att: BoardAttachment, i: number) => (
+                <li key={i}>
+                  <a
+                    href={att.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download={att.name}
+                    className="flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-sm text-slate-700 transition-colors"
+                  >
+                    <span className="text-base">📎</span>
+                    <span className="flex-1 truncate">{att.name}</span>
+                    <span className="text-xs text-slate-400 flex-shrink-0">
+                      {att.size < 1024 * 1024 ? `${(att.size / 1024).toFixed(1)}KB` : `${(att.size / (1024 * 1024)).toFixed(1)}MB`}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </article>
 
       {/* 관리자 버튼 */}

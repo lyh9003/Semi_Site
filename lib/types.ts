@@ -46,6 +46,12 @@ export interface TelegramMessage {
   sentiment: string;
 }
 
+export interface BoardAttachment {
+  name: string;
+  url: string;
+  size: number;
+}
+
 export interface BoardPost {
   id: number;
   title: string;
@@ -55,6 +61,7 @@ export interface BoardPost {
   updated_at: string;
   views: number;
   images: string[];
+  attachments: BoardAttachment[];
 }
 
 export interface Subscription {

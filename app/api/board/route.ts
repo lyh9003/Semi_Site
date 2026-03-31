@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { title, content, images } = await req.json();
+  const { title, content, images, attachments } = await req.json();
 
   if (!title?.trim() || !content?.trim()) {
     return NextResponse.json({ error: "제목과 내용을 입력해주세요." }, { status: 400 });
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   const service = getServiceClient();
   const { data, error } = await service
     .from("board_posts")
-    .insert({ title: title.trim(), content: content.trim(), author_email: user.email, images: images ?? [] })
+    .insert({ title: title.trim(), content: content.trim(), author_email: user.email, images: images ?? [], attachments: attachments ?? [] })
     .select()
     .single();
 
