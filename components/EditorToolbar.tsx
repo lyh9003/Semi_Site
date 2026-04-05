@@ -67,27 +67,37 @@ export default function EditorToolbar({ onImageClick, onAttachClick, uploading, 
         title="글자 크기"
         defaultValue=""
         onChange={(e) => {
-          if (e.target.value) {
-            exec("fontSize", "7"); // placeholder size
-            // execCommand fontSize only supports 1-7, so we override with style
-            const sel = window.getSelection();
-            if (sel && sel.rangeCount > 0) {
-              const range = sel.getRangeAt(0);
-              const span = document.createElement("span");
-              span.style.fontSize = `${e.target.value}px`;
-              try {
-                range.surroundContents(span);
-                sel.removeAllRanges();
-                const newRange = document.createRange();
-                newRange.setStartAfter(span);
-                newRange.collapse(true);
-                sel.addRange(newRange);
-              } catch {
-                // 선택 범위가 여러 요소에 걸쳐있으면 무시
-              }
-            }
-          }
+          const size = e.target.value;
           e.target.value = "";
+          if (!size) return;
+
+          const sel = window.getSelection();
+          if (!sel || sel.rangeCount === 0) return;
+          const range = sel.getRangeAt(0);
+          const span = document.createElement("span");
+          span.style.fontSize = `${size}px`;
+
+          if (!range.collapsed) {
+            // 텍스트 선택된 경우: 선택 영역을 span으로 감싸기
+            const fragment = range.extractContents();
+            span.appendChild(fragment);
+            range.insertNode(span);
+            // 커서를 span 뒤로
+            const newRange = document.createRange();
+            newRange.setStartAfter(span);
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+          } else {
+            // 커서만 있는 경우: 빈 span 삽입 후 커서를 안에 위치
+            span.innerHTML = "\u200B"; // zero-width space
+            range.insertNode(span);
+            const newRange = document.createRange();
+            newRange.setStart(span.firstChild!, 1);
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+          }
         }}
         className="h-7 px-1 text-xs border border-slate-200 rounded bg-white text-slate-700 hover:bg-slate-50 cursor-pointer"
       >
