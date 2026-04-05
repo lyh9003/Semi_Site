@@ -6,6 +6,15 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { BoardPost, BoardAttachment } from "@/lib/types";
 
+// 텍스트 노드의 bare URL을 <a> 태그로 변환
+function autoLinkUrls(html: string): string {
+  // 이미 href 안에 있는 URL은 건드리지 않음
+  return html.replace(
+    /(?<!href=["'])(https?:\/\/[^\s<"']+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:#3182ce;text-decoration:underline">$1</a>'
+  );
+}
+
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
 export default function BoardDetailPage() {
@@ -90,7 +99,7 @@ export default function BoardDetailPage() {
         <div className="px-6 py-6">
           <div
             className="text-slate-700 text-sm leading-relaxed prose prose-sm max-w-none [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-2 [&_img]:cursor-pointer"
-            dangerouslySetInnerHTML={{ __html: post.content }}
+            dangerouslySetInnerHTML={{ __html: autoLinkUrls(post.content) }}
             onClick={(e) => {
               const target = e.target as HTMLElement;
               if (target.tagName === "IMG") setLightbox((target as HTMLImageElement).src);

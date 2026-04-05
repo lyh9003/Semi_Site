@@ -150,6 +150,43 @@ export default function EditorToolbar({ onImageClick, onAttachClick, uploading, 
         />
       </div>
 
+      {/* 링크 */}
+      <button
+        type="button"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          const url = window.prompt("링크 URL을 입력하세요", "https://");
+          if (!url) return;
+          const sel = window.getSelection();
+          if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+            document.execCommand("createLink", false, url);
+            // 링크에 target=_blank 추가
+            const anchors = document.querySelectorAll(`a[href="${url}"]`);
+            anchors.forEach((a) => {
+              (a as HTMLAnchorElement).target = "_blank";
+              (a as HTMLAnchorElement).rel = "noopener noreferrer";
+              (a as HTMLAnchorElement).style.color = "#3182ce";
+              (a as HTMLAnchorElement).style.textDecoration = "underline";
+            });
+          } else {
+            // 선택 없으면 링크 텍스트도 입력받아 삽입
+            const text = window.prompt("링크에 표시할 텍스트를 입력하세요", url) || url;
+            const a = document.createElement("a");
+            a.href = url;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.textContent = text;
+            a.style.color = "#3182ce";
+            a.style.textDecoration = "underline";
+            document.execCommand("insertHTML", false, a.outerHTML);
+          }
+        }}
+        title="링크 삽입"
+        className="w-7 h-7 flex items-center justify-center rounded text-slate-700 hover:bg-slate-200 transition-colors text-sm"
+      >
+        🔗
+      </button>
+
       <div className="w-px h-5 bg-slate-300 mx-0.5" />
 
       {/* 이미지 삽입 */}
