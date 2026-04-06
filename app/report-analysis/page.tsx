@@ -693,7 +693,7 @@ export default function ReportAnalysisPage() {
         ) : (
           <div className="flex flex-col items-center justify-center h-full py-20 text-slate-400">
             {pages.length === 0
-              ? <>{isAdmin && <button type="button" onClick={handleAddPage} className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">+ 첫 페이지 만들기</button>}</>
+              ? <>{isAdmin && <button type="button" onClick={() => handleAddPage(null)} className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">+ 첫 페이지 만들기</button>}</>
               : <p className="text-sm">왼쪽에서 페이지를 선택하세요</p>}
           </div>
         )}
