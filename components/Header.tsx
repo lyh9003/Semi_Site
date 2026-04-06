@@ -42,9 +42,9 @@ export default function Header() {
     { href: "/", label: "홈" },
     { href: "/news", label: "뉴스" },
     { href: "/reports", label: "증권 리포트" },
+    { href: "/report-analysis", label: "증권 리포트 Pick" },
     { href: "/telegram", label: "텔레그램" },
     { href: "/board", label: "아카이브" },
-    { href: "/report-analysis", label: "레포트 분석" },
     { href: "https://www.notion.so/321972ad561981d7be89c0e7551c0843", label: "Notion", external: true },
   ] as { href: string; label: string; external?: boolean }[];
 
