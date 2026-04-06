@@ -11,12 +11,12 @@ function getServiceClient() {
   );
 }
 
-export async function GET(req: NextRequest) {
-  const pageId = new URL(req.url).searchParams.get("page_id");
+export async function GET() {
   const service = getServiceClient();
-  let query = service.from("report_blocks").select("*").order("order_index", { ascending: true });
-  if (pageId) query = query.eq("page_id", pageId);
-  const { data, error } = await query;
+  const { data, error } = await service
+    .from("report_pages")
+    .select("*")
+    .order("order_index", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data: data ?? [] });
 }
@@ -27,11 +27,11 @@ export async function POST(req: NextRequest) {
   if (!user || user.email?.trim() !== ADMIN_EMAIL)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { type, content, order_index, page_id } = await req.json();
+  const { title, icon, order_index } = await req.json();
   const service = getServiceClient();
   const { data, error } = await service
-    .from("report_blocks")
-    .insert({ type: type ?? "text", content: content ?? "", order_index: order_index ?? 0, page_id })
+    .from("report_pages")
+    .insert({ title: title ?? "새 페이지", icon: icon ?? "📄", order_index: order_index ?? 0 })
     .select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data }, { status: 201 });

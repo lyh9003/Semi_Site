@@ -11,28 +11,30 @@ function getServiceClient() {
   );
 }
 
-export async function GET(req: NextRequest) {
-  const pageId = new URL(req.url).searchParams.get("page_id");
-  const service = getServiceClient();
-  let query = service.from("report_blocks").select("*").order("order_index", { ascending: true });
-  if (pageId) query = query.eq("page_id", pageId);
-  const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data: data ?? [] });
-}
-
-export async function POST(req: NextRequest) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user || user.email?.trim() !== ADMIN_EMAIL)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { type, content, order_index, page_id } = await req.json();
+  const body = await req.json();
   const service = getServiceClient();
   const { data, error } = await service
-    .from("report_blocks")
-    .insert({ type: type ?? "text", content: content ?? "", order_index: order_index ?? 0, page_id })
-    .select().single();
+    .from("report_pages").update(body).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data }, { status: 201 });
+  return NextResponse.json({ data });
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || user.email?.trim() !== ADMIN_EMAIL)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const service = getServiceClient();
+  const { error } = await service.from("report_pages").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
 }

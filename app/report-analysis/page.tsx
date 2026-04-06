@@ -7,322 +7,462 @@ const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim();
 
 type BlockType = "text" | "h1" | "h2" | "h3" | "image" | "divider" | "quote";
 
-interface Block {
-  id: number;
-  type: BlockType;
-  content: string;
-  order_index: number;
-}
+interface Page { id: number; title: string; icon: string; order_index: number; }
+interface Block { id: number; type: BlockType; content: string; order_index: number; page_id: number; }
 
-const TYPE_LABELS: Record<BlockType, string> = {
-  text: "텍스트",
-  h1: "제목 1",
-  h2: "제목 2",
-  h3: "제목 3",
-  image: "이미지",
-  divider: "구분선",
-  quote: "인용",
+const TYPE_LABELS: Record<BlockType, { label: string; icon: string }> = {
+  text:    { label: "텍스트",  icon: "¶" },
+  h1:      { label: "제목 1",  icon: "H1" },
+  h2:      { label: "제목 2",  icon: "H2" },
+  h3:      { label: "제목 3",  icon: "H3" },
+  image:   { label: "이미지",  icon: "🖼" },
+  divider: { label: "구분선",  icon: "—" },
+  quote:   { label: "인용",    icon: "❝" },
 };
 
 const FONT_SIZES = ["12", "14", "16", "18", "20", "24", "28", "32"];
 const COLORS = [
-  { label: "빨강", value: "#e53e3e" },
-  { label: "주황", value: "#dd6b20" },
-  { label: "노랑", value: "#d69e2e" },
-  { label: "초록", value: "#38a169" },
-  { label: "파랑", value: "#3182ce" },
+  { label: "빨강", value: "#e53e3e" }, { label: "주황", value: "#dd6b20" },
+  { label: "초록", value: "#38a169" }, { label: "파랑", value: "#3182ce" },
   { label: "회색", value: "#718096" },
 ];
+const PAGE_ICONS = ["📄", "📝", "📊", "📈", "💡", "🔍", "📌", "⭐", "🗂", "📋"];
 
-function autoLinkUrls(html: string) {
-  return html.replace(
-    /(?<!href=["'])(https?:\/\/[^\s<"']+)/g,
-    '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:#3182ce;text-decoration:underline">$1</a>'
-  );
+function autoLink(html: string) {
+  return html.replace(/(?<!href=["'])(https?:\/\/[^\s<"']+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:#3182ce;text-decoration:underline">$1</a>');
 }
 
 // ── 포맷 툴바 ─────────────────────────────────────────────
-function FormatBar({ colorPickerRef }: { colorPickerRef: React.RefObject<HTMLInputElement | null> }) {
+function FormatBar() {
+  const colorRef = useRef<HTMLInputElement>(null);
   function exec(cmd: string, val?: string) { document.execCommand(cmd, false, val); }
 
+  const applySize = (size: string) => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    const span = document.createElement("span");
+    span.style.fontSize = `${size}px`;
+    if (!range.collapsed) {
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+    } else {
+      span.innerHTML = "\u200B";
+      range.insertNode(span);
+      const r = document.createRange();
+      r.setStart(span.firstChild!, 1); r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+    }
+  };
+
+  const insertLink = () => {
+    const url = window.prompt("링크 URL", "https://");
+    if (!url) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) {
+      exec("createLink", url);
+      document.querySelectorAll(`a[href="${url}"]`).forEach((a) => {
+        (a as HTMLAnchorElement).target = "_blank";
+        (a as HTMLAnchorElement).rel = "noopener noreferrer";
+        (a as HTMLAnchorElement).style.cssText = "color:#3182ce;text-decoration:underline";
+      });
+    } else {
+      const text = window.prompt("표시 텍스트", url) || url;
+      exec("insertHTML", `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#3182ce;text-decoration:underline">${text}</a>`);
+    }
+  };
+
   return (
-    <div className="flex flex-wrap items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl shadow-sm">
-      <button type="button" onMouseDown={(e) => { e.preventDefault(); exec("bold"); }}
-        className="w-7 h-7 flex items-center justify-center rounded font-bold text-slate-700 hover:bg-slate-100 text-sm">B</button>
-      <button type="button" onMouseDown={(e) => { e.preventDefault(); exec("italic"); }}
-        className="w-7 h-7 flex items-center justify-center rounded italic text-slate-700 hover:bg-slate-100 text-sm">I</button>
-      <button type="button" onMouseDown={(e) => { e.preventDefault(); exec("underline"); }}
-        className="w-7 h-7 flex items-center justify-center rounded underline text-slate-700 hover:bg-slate-100 text-sm">U</button>
+    <div className="flex flex-wrap items-center gap-1 px-3 py-1.5 bg-white border-b border-slate-200">
+      {[["B","bold","font-bold"],["I","italic","italic"],["U","underline","underline"]].map(([label, cmd, cls]) => (
+        <button key={cmd} type="button"
+          onMouseDown={(e) => { e.preventDefault(); exec(cmd); }}
+          className={`w-7 h-7 flex items-center justify-center rounded text-slate-600 hover:bg-slate-100 text-sm ${cls}`}>
+          {label}
+        </button>
+      ))}
       <div className="w-px h-4 bg-slate-200 mx-0.5" />
-      <select
-        className="h-7 px-1 text-xs border border-slate-200 rounded bg-white text-slate-700 cursor-pointer"
-        defaultValue=""
-        onChange={(e) => {
-          const size = e.target.value;
-          e.target.value = "";
-          if (!size) return;
-          const sel = window.getSelection();
-          if (!sel || sel.rangeCount === 0) return;
-          const range = sel.getRangeAt(0);
-          const span = document.createElement("span");
-          span.style.fontSize = `${size}px`;
-          if (!range.collapsed) {
-            span.appendChild(range.extractContents());
-            range.insertNode(span);
-          } else {
-            span.innerHTML = "\u200B";
-            range.insertNode(span);
-            const r = document.createRange();
-            r.setStart(span.firstChild!, 1);
-            r.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(r);
-          }
-        }}
-      >
+      <select className="h-7 px-1 text-xs border border-slate-200 rounded bg-white text-slate-600 cursor-pointer"
+        defaultValue="" onChange={(e) => { const v = e.target.value; e.target.value = ""; if (v) applySize(v); }}>
         <option value="">크기</option>
         {FONT_SIZES.map((s) => <option key={s} value={s}>{s}px</option>)}
       </select>
-      <select
-        className="h-7 px-1 text-xs border border-slate-200 rounded bg-white text-slate-700 cursor-pointer"
-        defaultValue=""
-        onChange={(e) => {
-          const color = e.target.value;
-          e.target.value = "";
-          if (color) exec("foreColor", color);
-        }}
-      >
+      <select className="h-7 px-1 text-xs border border-slate-200 rounded bg-white text-slate-600 cursor-pointer"
+        defaultValue="" onChange={(e) => { const v = e.target.value; e.target.value = ""; if (v) exec("foreColor", v); }}>
         <option value="">색상</option>
         {COLORS.map((c) => <option key={c.value} value={c.value} style={{ color: c.value }}>{c.label}</option>)}
       </select>
-      <button type="button"
-        onMouseDown={(e) => { e.preventDefault(); colorPickerRef.current?.click(); }}
-        className="w-7 h-7 flex items-center justify-center rounded border border-slate-200 hover:bg-slate-100 text-sm">🎨</button>
-      <input ref={colorPickerRef} type="color" className="absolute opacity-0 w-0 h-0"
+      <button type="button" onMouseDown={(e) => { e.preventDefault(); colorRef.current?.click(); }}
+        className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 text-sm">🎨</button>
+      <input ref={colorRef} type="color" className="absolute opacity-0 w-0 h-0"
         onChange={(e) => exec("foreColor", e.target.value)} />
       <div className="w-px h-4 bg-slate-200 mx-0.5" />
-      <button type="button"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          const url = window.prompt("링크 URL", "https://");
-          if (!url) return;
-          const sel = window.getSelection();
-          if (sel && !sel.isCollapsed) {
-            exec("createLink", url);
-            document.querySelectorAll(`a[href="${url}"]`).forEach((a) => {
-              (a as HTMLAnchorElement).target = "_blank";
-              (a as HTMLAnchorElement).rel = "noopener noreferrer";
-              (a as HTMLAnchorElement).style.cssText = "color:#3182ce;text-decoration:underline";
-            });
-          } else {
-            const text = window.prompt("표시 텍스트", url) || url;
-            const a = `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#3182ce;text-decoration:underline">${text}</a>`;
-            exec("insertHTML", a);
-          }
-        }}
-        className="w-7 h-7 flex items-center justify-center rounded text-slate-700 hover:bg-slate-100 text-sm">🔗</button>
+      <button type="button" onMouseDown={(e) => { e.preventDefault(); insertLink(); }}
+        className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 text-sm">🔗</button>
     </div>
   );
 }
 
-// ── 블록 컴포넌트 ──────────────────────────────────────────
-interface BlockProps {
-  block: Block;
-  isAdmin: boolean;
-  isFirst: boolean;
-  isLast: boolean;
+// ── 블록 ──────────────────────────────────────────────────
+function BlockItem({ block, isAdmin, isFirst, isLast, onSave, onDelete, onMove, onAddAfter, onImageUpload }: {
+  block: Block; isAdmin: boolean; isFirst: boolean; isLast: boolean;
   onSave: (id: number, content: string, type?: BlockType) => void;
   onDelete: (id: number) => void;
-  onMoveUp: (id: number) => void;
-  onMoveDown: (id: number) => void;
-  onAddAfter: (id: number) => void;
-  onImageUpload: (id: number, file: File) => Promise<void>;
-}
-
-function BlockItem({ block, isAdmin, isFirst, isLast, onSave, onDelete, onMoveUp, onMoveDown, onAddAfter, onImageUpload }: BlockProps) {
+  onMove: (id: number, dir: "up" | "down") => void;
+  onAddAfter: (id: number, type: BlockType) => void;
+  onImageUpload: (blockId: number, file: File) => Promise<void>;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
-  const [addHovered, setAddHovered] = useState(false);
-  const saveTimer = useRef<ReturnType<typeof setTimeout>>(null);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(null);
 
   useEffect(() => {
     if (ref.current && block.type !== "image" && block.type !== "divider") {
-      if (ref.current.innerHTML !== block.content) {
-        ref.current.innerHTML = block.content;
-      }
+      if (ref.current.innerHTML !== block.content) ref.current.innerHTML = block.content;
     }
   }, [block.id]);
 
-  const schedSave = useCallback(() => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
+  const schedSave = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
       if (ref.current) onSave(block.id, ref.current.innerHTML);
     }, 800);
-  }, [block.id, onSave]);
+  };
 
-  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+  const handlePaste = async (e: React.ClipboardEvent) => {
     const imgs = Array.from(e.clipboardData.items)
-      .filter((i) => i.type.startsWith("image/"))
-      .map((i) => i.getAsFile())
-      .filter((f): f is File => f !== null);
-    if (imgs.length > 0) {
-      e.preventDefault();
-      for (const f of imgs) await onImageUpload(block.id, f);
-    }
-  }, [block.id, onImageUpload]);
+      .filter((i) => i.type.startsWith("image/")).map((i) => i.getAsFile()).filter(Boolean) as File[];
+    if (imgs.length) { e.preventDefault(); for (const f of imgs) await onImageUpload(block.id, f); }
+  };
 
-  const blockClass = {
-    text: "text-slate-700 text-sm leading-relaxed",
-    h1: "text-2xl font-bold text-slate-900",
-    h2: "text-xl font-bold text-slate-800",
-    h3: "text-lg font-semibold text-slate-800",
-    quote: "text-slate-600 italic border-l-4 border-blue-400 pl-4 text-sm leading-relaxed",
-    image: "",
-    divider: "",
-  }[block.type];
+  const blockClass: Record<BlockType, string> = {
+    text: "text-slate-700 text-[15px] leading-7",
+    h1: "text-3xl font-bold text-slate-900 leading-tight",
+    h2: "text-2xl font-bold text-slate-800 leading-tight",
+    h3: "text-xl font-semibold text-slate-800 leading-snug",
+    quote: "text-slate-600 italic border-l-4 border-blue-400 pl-4 text-[15px] leading-7",
+    image: "", divider: "",
+  };
 
-  if (block.type === "divider") {
-    return (
-      <div className="relative group" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-        <hr className="border-slate-200 my-1" />
-        {isAdmin && hovered && (
-          <AdminControls
-            isFirst={isFirst} isLast={isLast}
-            onMoveUp={() => onMoveUp(block.id)}
-            onMoveDown={() => onMoveDown(block.id)}
-            onDelete={() => onDelete(block.id)}
-            label="구분선"
-          />
-        )}
-        {isAdmin && (
-          <AddButton show={addHovered} onMouseEnter={() => setAddHovered(true)} onMouseLeave={() => setAddHovered(false)} onClick={() => onAddAfter(block.id)} />
-        )}
-      </div>
-    );
-  }
+  if (block.type === "divider") return (
+    <div className="group relative py-2" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      <hr className="border-slate-200" />
+      {isAdmin && hovered && <BlockControls isFirst={isFirst} isLast={isLast} type={block.type}
+        onUp={() => onMove(block.id, "up")} onDown={() => onMove(block.id, "down")} onDelete={() => onDelete(block.id)} />}
+      {isAdmin && <AddLine show={showAddMenu} onEnter={() => setShowAddMenu(true)} onLeave={() => setShowAddMenu(false)} onAdd={(t) => onAddAfter(block.id, t)} />}
+    </div>
+  );
 
-  if (block.type === "image") {
-    return (
-      <div className="relative group" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-        {block.content ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={block.content} alt="" className="max-w-full rounded-lg my-1" />
-        ) : isAdmin ? (
-          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
-            <span className="text-2xl mb-1">🖼</span>
-            <span className="text-sm text-slate-400">클릭하거나 이미지를 붙여넣기</span>
-            <input type="file" accept="image/*" className="hidden"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (f) await onImageUpload(block.id, f);
-              }} />
-          </label>
-        ) : null}
-        {isAdmin && hovered && block.content && (
-          <label className="absolute top-2 left-2 px-2 py-1 text-xs bg-black/50 text-white rounded cursor-pointer hover:bg-black/70">
-            이미지 변경
-            <input type="file" accept="image/*" className="hidden"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (f) await onImageUpload(block.id, f);
-              }} />
-          </label>
-        )}
-        {isAdmin && hovered && (
-          <AdminControls
-            isFirst={isFirst} isLast={isLast}
-            onMoveUp={() => onMoveUp(block.id)}
-            onMoveDown={() => onMoveDown(block.id)}
-            onDelete={() => onDelete(block.id)}
-            label="이미지"
-          />
-        )}
-        {isAdmin && (
-          <AddButton show={addHovered} onMouseEnter={() => setAddHovered(true)} onMouseLeave={() => setAddHovered(false)} onClick={() => onAddAfter(block.id)} />
-        )}
-      </div>
-    );
-  }
+  if (block.type === "image") return (
+    <div className="group relative" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      {block.content
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={block.content} alt="" className="max-w-full rounded-lg my-1" />
+        : isAdmin
+          ? <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors text-slate-400">
+              <span className="text-2xl mb-1">🖼</span><span className="text-sm">클릭 또는 Ctrl+V로 이미지 추가</span>
+              <input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) await onImageUpload(block.id, f); }} />
+            </label>
+          : null}
+      {isAdmin && hovered && block.content && (
+        <label className="absolute top-2 left-2 px-2 py-1 text-xs bg-black/50 text-white rounded cursor-pointer hover:bg-black/70 transition-colors">
+          이미지 변경<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) await onImageUpload(block.id, f); }} />
+        </label>
+      )}
+      {isAdmin && hovered && <BlockControls isFirst={isFirst} isLast={isLast} type={block.type}
+        onUp={() => onMove(block.id, "up")} onDown={() => onMove(block.id, "down")} onDelete={() => onDelete(block.id)} />}
+      {isAdmin && <AddLine show={showAddMenu} onEnter={() => setShowAddMenu(true)} onLeave={() => setShowAddMenu(false)} onAdd={(t) => onAddAfter(block.id, t)} />}
+    </div>
+  );
 
-  // 텍스트 계열 블록
   return (
-    <div className="relative group" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+    <div className="group relative" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       {isAdmin && hovered && (
-        <div className="absolute -left-8 top-1/2 -translate-y-1/2 flex flex-col gap-0.5">
-          <select
-            value={block.type}
-            onChange={(e) => {
-              onSave(block.id, ref.current?.innerHTML ?? block.content, e.target.value as BlockType);
-            }}
-            className="text-xs border border-slate-200 rounded bg-white text-slate-500 cursor-pointer w-6 h-6 p-0 text-center"
-            title="블록 타입 변경"
-          >
-            {(Object.keys(TYPE_LABELS) as BlockType[]).filter(t => t !== "divider" && t !== "image").map((t) => (
-              <option key={t} value={t}>{TYPE_LABELS[t]}</option>
-            ))}
-          </select>
+        <select value={block.type} title="블록 타입"
+          onChange={(e) => onSave(block.id, ref.current?.innerHTML ?? block.content, e.target.value as BlockType)}
+          className="absolute -left-7 top-1 text-[10px] border border-slate-200 rounded bg-white text-slate-400 cursor-pointer w-6 h-6 p-0 text-center opacity-70 hover:opacity-100">
+          {(Object.keys(TYPE_LABELS) as BlockType[]).filter(t => t !== "divider" && t !== "image").map((t) => (
+            <option key={t} value={t}>{TYPE_LABELS[t].label}</option>
+          ))}
+        </select>
+      )}
+      <div ref={ref} contentEditable={isAdmin} suppressContentEditableWarning
+        onInput={schedSave}
+        onBlur={() => { if (timer.current) clearTimeout(timer.current); if (ref.current) onSave(block.id, ref.current.innerHTML); }}
+        onPaste={handlePaste}
+        data-placeholder={isAdmin ? (TYPE_LABELS[block.type]?.label + "...") : undefined}
+        className={`outline-none w-full min-h-[1.5em] py-0.5 break-words ${blockClass[block.type]} ${isAdmin ? "cursor-text empty:before:content-[attr(data-placeholder)] empty:before:text-slate-300" : ""}`}
+        dangerouslySetInnerHTML={!isAdmin ? { __html: autoLink(block.content) } : undefined}
+      />
+      {isAdmin && hovered && <BlockControls isFirst={isFirst} isLast={isLast} type={block.type}
+        onUp={() => onMove(block.id, "up")} onDown={() => onMove(block.id, "down")} onDelete={() => onDelete(block.id)} />}
+      {isAdmin && <AddLine show={showAddMenu} onEnter={() => setShowAddMenu(true)} onLeave={() => setShowAddMenu(false)} onAdd={(t) => onAddAfter(block.id, t)} />}
+    </div>
+  );
+}
+
+function BlockControls({ isFirst, isLast, type, onUp, onDown, onDelete }: {
+  isFirst: boolean; isLast: boolean; type: string;
+  onUp: () => void; onDown: () => void; onDelete: () => void;
+}) {
+  return (
+    <div className="absolute right-0 top-0 -translate-y-0 translate-x-full pl-2 flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 shadow-sm z-10 ml-2">
+      <span className="text-[10px] text-slate-300 pr-1">{TYPE_LABELS[type as BlockType]?.icon}</span>
+      <button type="button" onClick={onUp} disabled={isFirst} className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:bg-slate-100 disabled:opacity-20 text-xs">↑</button>
+      <button type="button" onClick={onDown} disabled={isLast} className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:bg-slate-100 disabled:opacity-20 text-xs">↓</button>
+      <button type="button" onClick={onDelete} className="w-5 h-5 flex items-center justify-center rounded text-red-400 hover:bg-red-50 text-xs">✕</button>
+    </div>
+  );
+}
+
+function AddLine({ show, onEnter, onLeave, onAdd }: {
+  show: boolean; onEnter: () => void; onLeave: () => void; onAdd: (t: BlockType) => void;
+}) {
+  return (
+    <div className="relative h-3 -mb-1 z-10" onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      {show && (
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex items-center">
+          <div className="flex-1 h-px bg-blue-300" />
+          <div className="relative mx-2">
+            <button type="button" className="w-5 h-5 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center hover:bg-blue-600 shadow-sm peer">+</button>
+            <div className="absolute left-1/2 -translate-x-1/2 top-6 bg-white border border-slate-200 rounded-xl shadow-lg p-1.5 z-20 grid grid-cols-2 gap-0.5 w-48 hidden peer-focus:grid">
+              {/* dropdown not needed; just add text block on click */}
+            </div>
+          </div>
+          <div className="flex-1 h-px bg-blue-300" />
         </div>
       )}
-      <div
-        ref={ref}
-        contentEditable={isAdmin}
-        suppressContentEditableWarning
-        onInput={schedSave}
-        onBlur={() => {
-          if (saveTimer.current) clearTimeout(saveTimer.current);
-          if (ref.current) onSave(block.id, ref.current.innerHTML);
-        }}
-        onPaste={handlePaste}
-        data-placeholder={isAdmin ? (block.type === "h1" ? "제목 1" : block.type === "h2" ? "제목 2" : block.type === "h3" ? "제목 3" : block.type === "quote" ? "인용문..." : "내용을 입력하세요...") : undefined}
-        className={`outline-none w-full py-1 px-0 break-words ${blockClass} ${isAdmin ? "cursor-text empty:before:content-[attr(data-placeholder)] empty:before:text-slate-300" : ""}`}
-        dangerouslySetInnerHTML={!isAdmin ? { __html: autoLinkUrls(block.content) } : undefined}
-      />
-      {isAdmin && hovered && (
-        <AdminControls
-          isFirst={isFirst} isLast={isLast}
-          onMoveUp={() => onMoveUp(block.id)}
-          onMoveDown={() => onMoveDown(block.id)}
-          onDelete={() => onDelete(block.id)}
-          label={TYPE_LABELS[block.type]}
-        />
-      )}
+    </div>
+  );
+}
+
+// ── 사이드바 ──────────────────────────────────────────────
+function Sidebar({ pages, selectedId, isAdmin, onSelect, onAdd, onRename, onDelete, onMove, sidebarOpen, onToggle }: {
+  pages: Page[]; selectedId: number | null; isAdmin: boolean;
+  onSelect: (id: number) => void;
+  onAdd: () => void;
+  onRename: (id: number, title: string) => void;
+  onDelete: (id: number) => void;
+  onMove: (id: number, dir: "up" | "down") => void;
+  sidebarOpen: boolean;
+  onToggle: () => void;
+}) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+
+  return (
+    <>
+      {/* 모바일 오버레이 */}
+      {sidebarOpen && <div className="fixed inset-0 bg-black/30 z-20 md:hidden" onClick={onToggle} />}
+
+      <aside className={`
+        fixed md:sticky top-[105px] md:top-[64px] left-0 z-30
+        h-[calc(100vh-105px)] md:h-[calc(100vh-64px)]
+        w-60 bg-[#f7f7f5] border-r border-slate-200
+        flex flex-col overflow-hidden
+        transition-transform duration-200
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+      `}>
+        {/* 사이드바 헤더 */}
+        <div className="px-3 py-3 border-b border-slate-200 flex items-center justify-between">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">레포트 분석</span>
+          <button type="button" onClick={onToggle} className="md:hidden w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:bg-slate-200 text-sm">✕</button>
+        </div>
+
+        {/* 페이지 목록 */}
+        <nav className="flex-1 overflow-y-auto py-2 px-1">
+          {pages.map((page, idx) => (
+            <div key={page.id} className="relative group"
+              onMouseEnter={() => setHoveredId(page.id)}
+              onMouseLeave={() => setHoveredId(null)}>
+              {editingId === page.id ? (
+                <div className="flex items-center gap-1 px-2 py-1">
+                  <span className="text-base">{page.icon}</span>
+                  <input autoFocus value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    onBlur={() => { onRename(page.id, editTitle); setEditingId(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { onRename(page.id, editTitle); setEditingId(null); } if (e.key === "Escape") setEditingId(null); }}
+                    className="flex-1 text-sm bg-white border border-blue-400 rounded px-1.5 py-0.5 outline-none"
+                  />
+                </div>
+              ) : (
+                <button type="button" onClick={() => onSelect(page.id)}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors text-left ${selectedId === page.id ? "bg-white shadow-sm text-slate-900 font-medium" : "text-slate-600 hover:bg-slate-200/60"}`}>
+                  <span className="text-base flex-shrink-0">{page.icon}</span>
+                  <span className="flex-1 truncate">{page.title}</span>
+                  {isAdmin && hoveredId === page.id && (
+                    <span className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button type="button" onClick={() => onMove(page.id, "up")} disabled={idx === 0}
+                        className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20 text-xs">↑</button>
+                      <button type="button" onClick={() => onMove(page.id, "down")} disabled={idx === pages.length - 1}
+                        className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20 text-xs">↓</button>
+                      <button type="button" onClick={() => { setEditTitle(page.title); setEditingId(page.id); }}
+                        className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-600 text-xs">✏️</button>
+                      <button type="button" onClick={() => onDelete(page.id)}
+                        className="w-4 h-4 flex items-center justify-center text-red-400 hover:text-red-600 text-xs">✕</button>
+                    </span>
+                  )}
+                </button>
+              )}
+            </div>
+          ))}
+          {pages.length === 0 && (
+            <p className="text-xs text-slate-400 text-center py-4 px-2">페이지가 없습니다</p>
+          )}
+        </nav>
+
+        {/* 새 페이지 추가 */}
+        {isAdmin && (
+          <div className="p-2 border-t border-slate-200">
+            <button type="button" onClick={onAdd}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-slate-500 hover:bg-slate-200/60 transition-colors">
+              <span className="text-base">+</span>
+              <span>새 페이지</span>
+            </button>
+          </div>
+        )}
+      </aside>
+    </>
+  );
+}
+
+// ── 블록 에디터 ────────────────────────────────────────────
+function BlockEditor({ pageId, isAdmin }: { pageId: number; isAdmin: boolean }) {
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showTypeMenu, setShowTypeMenu] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/report-blocks?page_id=${pageId}`)
+      .then((r) => r.json())
+      .then(({ data }) => { setBlocks(data ?? []); setLoading(false); });
+  }, [pageId]);
+
+  const handleSave = useCallback(async (id: number, content: string, type?: BlockType) => {
+    setSaving(true);
+    const body: Record<string, string> = { content };
+    if (type) body.type = type;
+    await fetch(`/api/report-blocks/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (type) setBlocks((prev) => prev.map((b) => b.id === id ? { ...b, type, content } : b));
+    setSaving(false);
+  }, []);
+
+  const handleDelete = useCallback(async (id: number) => {
+    if (!confirm("이 블록을 삭제할까요?")) return;
+    await fetch(`/api/report-blocks/${id}`, { method: "DELETE" });
+    setBlocks((prev) => prev.filter((b) => b.id !== id));
+  }, []);
+
+  const handleMove = useCallback(async (id: number, dir: "up" | "down") => {
+    const idx = blocks.findIndex((b) => b.id === id);
+    if (dir === "up" && idx === 0) return;
+    if (dir === "down" && idx === blocks.length - 1) return;
+    const next = [...blocks];
+    const si = dir === "up" ? idx - 1 : idx + 1;
+    [next[idx], next[si]] = [next[si], next[idx]];
+    setBlocks(next);
+    await fetch("/api/report-blocks/reorder", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: next.map((b) => b.id) }),
+    });
+  }, [blocks]);
+
+  const addBlock = useCallback(async (type: BlockType, afterId?: number) => {
+    const idx = afterId != null ? blocks.findIndex((b) => b.id === afterId) : blocks.length - 1;
+    const res = await fetch("/api/report-blocks", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, content: "", order_index: idx + 1, page_id: pageId }),
+    });
+    const { data } = await res.json();
+    setBlocks((prev) => {
+      const insertAt = afterId != null ? prev.findIndex((b) => b.id === afterId) + 1 : prev.length;
+      const next = [...prev];
+      next.splice(insertAt, 0, data);
+      return next;
+    });
+    setShowTypeMenu(false);
+  }, [blocks, pageId]);
+
+  const handleImageUpload = useCallback(async (blockId: number, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/board/upload", { method: "POST", body: formData });
+    if (!res.ok) return;
+    const { url } = await res.json();
+    const block = blocks.find((b) => b.id === blockId);
+    if (block?.type === "image") {
+      await fetch(`/api/report-blocks/${blockId}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: url }),
+      });
+      setBlocks((prev) => prev.map((b) => b.id === blockId ? { ...b, content: url } : b));
+    } else {
+      const img = document.createElement("img");
+      img.src = url;
+      img.style.cssText = "max-width:100%;border-radius:8px;margin:4px 0;display:block;";
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        range.insertNode(img);
+        range.setStartAfter(img); range.collapse(true);
+        sel.removeAllRanges(); sel.addRange(range);
+      }
+    }
+  }, [blocks]);
+
+  if (loading) return (
+    <div className="flex justify-center py-20">
+      <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+
+  return (
+    <div>
+      {saving && <p className="text-xs text-slate-400 mb-2">저장 중...</p>}
+
+      {/* 블록 목록 */}
+      <div className="space-y-0.5 ml-6 mr-12">
+        {blocks.length === 0 && isAdmin && (
+          <p className="text-slate-300 text-sm py-6">아래 버튼으로 첫 블록을 추가해보세요.</p>
+        )}
+        {blocks.length === 0 && !isAdmin && (
+          <p className="text-slate-400 text-sm py-6">작성된 내용이 없습니다.</p>
+        )}
+        {blocks.map((block, idx) => (
+          <BlockItem key={block.id} block={block} isAdmin={isAdmin}
+            isFirst={idx === 0} isLast={idx === blocks.length - 1}
+            onSave={handleSave} onDelete={handleDelete} onMove={handleMove}
+            onAddAfter={(id, type) => addBlock(type, id)}
+            onImageUpload={handleImageUpload}
+          />
+        ))}
+      </div>
+
+      {/* 블록 추가 */}
       {isAdmin && (
-        <AddButton show={addHovered} onMouseEnter={() => setAddHovered(true)} onMouseLeave={() => setAddHovered(false)} onClick={() => onAddAfter(block.id)} />
-      )}
-    </div>
-  );
-}
-
-function AdminControls({ isFirst, isLast, onMoveUp, onMoveDown, onDelete, label }: {
-  isFirst: boolean; isLast: boolean;
-  onMoveUp: () => void; onMoveDown: () => void; onDelete: () => void; label: string;
-}) {
-  return (
-    <div className="absolute -right-2 top-1/2 -translate-y-1/2 translate-x-full flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-1.5 py-1 shadow-sm z-10">
-      <span className="text-xs text-slate-300 pr-1">{label}</span>
-      <button type="button" onClick={onMoveUp} disabled={isFirst}
-        className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:bg-slate-100 disabled:opacity-20 text-xs">↑</button>
-      <button type="button" onClick={onMoveDown} disabled={isLast}
-        className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:bg-slate-100 disabled:opacity-20 text-xs">↓</button>
-      <button type="button" onClick={onDelete}
-        className="w-5 h-5 flex items-center justify-center rounded text-red-400 hover:bg-red-50 text-xs">✕</button>
-    </div>
-  );
-}
-
-function AddButton({ show, onMouseEnter, onMouseLeave, onClick }: {
-  show: boolean; onMouseEnter: () => void; onMouseLeave: () => void; onClick: () => void;
-}) {
-  return (
-    <div className="relative h-2 -my-1 z-10" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
-      {show && (
-        <div className="absolute inset-x-0 flex items-center justify-center">
-          <div className="flex-1 h-px bg-blue-300" />
-          <button type="button" onClick={onClick}
-            className="mx-2 w-5 h-5 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center hover:bg-blue-600 shadow-sm">
-            +
+        <div className="mt-4 ml-6 relative">
+          <button type="button" onClick={() => setShowTypeMenu((v) => !v)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+            <span className="text-base leading-none">+</span> 블록 추가
           </button>
-          <div className="flex-1 h-px bg-blue-300" />
+          {showTypeMenu && (
+            <div className="absolute left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-2 z-20 grid grid-cols-2 gap-1 w-64"
+              onMouseLeave={() => setShowTypeMenu(false)}>
+              {(Object.entries(TYPE_LABELS) as [BlockType, { label: string; icon: string }][]).map(([type, { label, icon }]) => (
+                <button key={type} type="button" onClick={() => addBlock(type)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors text-left">
+                  <span className="w-6 text-center text-base">{icon}</span>
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -333,199 +473,156 @@ function AddButton({ show, onMouseEnter, onMouseLeave, onClick }: {
 export default function ReportAnalysisPage() {
   const supabase = createClient();
   const [isAdmin, setIsAdmin] = useState(false);
-  const [blocks, setBlocks] = useState<Block[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [addMenu, setAddMenu] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const colorPickerRef = useRef<HTMLInputElement>(null);
+  const [pages, setPages] = useState<Page[]>([]);
+  const [selectedPageId, setSelectedPageId] = useState<number | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [editingPageTitle, setEditingPageTitle] = useState(false);
+  const [pageTitle, setPageTitle] = useState("");
+  const [pageIcon, setPageIcon] = useState("📄");
+  const [showIconPicker, setShowIconPicker] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setIsAdmin(data.user?.email?.trim() === ADMIN_EMAIL);
+    supabase.auth.getUser().then(({ data }) => setIsAdmin(data.user?.email?.trim() === ADMIN_EMAIL));
+    fetch("/api/report-pages").then((r) => r.json()).then(({ data }) => {
+      setPages(data ?? []);
+      if (data?.length > 0) setSelectedPageId(data[0].id);
     });
-    fetch("/api/report-blocks")
-      .then((r) => r.json())
-      .then(({ data }) => { setBlocks(data ?? []); setLoading(false); })
-      .catch(() => setLoading(false));
   }, []);
 
-  // ── 블록 저장 ──
-  const handleSave = useCallback(async (id: number, content: string, type?: BlockType) => {
-    setSaving(true);
-    const body: Record<string, string> = { content };
-    if (type) body.type = type;
-    await fetch(`/api/report-blocks/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (type) {
-      setBlocks((prev) => prev.map((b) => b.id === id ? { ...b, type, content } : b));
-    }
-    setSaving(false);
-  }, []);
+  const selectedPage = pages.find((p) => p.id === selectedPageId);
 
-  // ── 블록 삭제 ──
-  const handleDelete = useCallback(async (id: number) => {
-    if (!confirm("이 블록을 삭제할까요?")) return;
-    await fetch(`/api/report-blocks/${id}`, { method: "DELETE" });
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
-  }, []);
+  useEffect(() => {
+    if (selectedPage) { setPageTitle(selectedPage.title); setPageIcon(selectedPage.icon); }
+  }, [selectedPageId]);
 
-  // ── 순서 이동 ──
-  const move = useCallback(async (id: number, dir: "up" | "down") => {
-    const idx = blocks.findIndex((b) => b.id === id);
-    if (dir === "up" && idx === 0) return;
-    if (dir === "down" && idx === blocks.length - 1) return;
-    const newBlocks = [...blocks];
-    const swapIdx = dir === "up" ? idx - 1 : idx + 1;
-    [newBlocks[idx], newBlocks[swapIdx]] = [newBlocks[swapIdx], newBlocks[idx]];
-    setBlocks(newBlocks);
-    await fetch("/api/report-blocks/reorder", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: newBlocks.map((b) => b.id) }),
-    });
-  }, [blocks]);
-
-  // ── 블록 추가 ──
-  const addBlock = useCallback(async (type: BlockType, afterId?: number) => {
-    const idx = afterId ? blocks.findIndex((b) => b.id === afterId) : blocks.length - 1;
-    const order_index = idx + 1;
-    const res = await fetch("/api/report-blocks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, content: "", order_index }),
+  const handleAddPage = async () => {
+    const res = await fetch("/api/report-pages", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "새 페이지", icon: "📄", order_index: pages.length }),
     });
     const { data } = await res.json();
-    setBlocks((prev) => {
-      const insertAt = afterId ? prev.findIndex((b) => b.id === afterId) + 1 : prev.length;
-      const next = [...prev];
-      next.splice(insertAt, 0, data);
-      return next;
+    setPages((prev) => [...prev, data]);
+    setSelectedPageId(data.id);
+  };
+
+  const handleRenamePage = async (id: number, title: string) => {
+    await fetch(`/api/report-pages/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }),
     });
-    setAddMenu(false);
-    // 새 블록에 포커스
-    setTimeout(() => {
-      const el = document.querySelector(`[data-block-id="${data.id}"]`) as HTMLElement;
-      el?.focus();
-    }, 100);
-  }, [blocks]);
+    setPages((prev) => prev.map((p) => p.id === id ? { ...p, title } : p));
+    if (id === selectedPageId) setPageTitle(title);
+  };
 
-  // ── 이미지 업로드 ──
-  const handleImageUpload = useCallback(async (blockId: number, file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    const res = await fetch("/api/board/upload", { method: "POST", body: formData });
-    if (!res.ok) return;
-    const { url } = await res.json();
+  const handleDeletePage = async (id: number) => {
+    if (!confirm("이 페이지를 삭제할까요?")) return;
+    await fetch(`/api/report-pages/${id}`, { method: "DELETE" });
+    const next = pages.filter((p) => p.id !== id);
+    setPages(next);
+    if (selectedPageId === id) setSelectedPageId(next[0]?.id ?? null);
+  };
 
-    const block = blocks.find((b) => b.id === blockId);
-    if (block?.type === "image") {
-      await fetch(`/api/report-blocks/${blockId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: url }),
-      });
-      setBlocks((prev) => prev.map((b) => b.id === blockId ? { ...b, content: url } : b));
-    } else {
-      // 텍스트 블록에 인라인 이미지 삽입
-      const img = document.createElement("img");
-      img.src = url;
-      img.style.cssText = "max-width:100%;border-radius:8px;margin:4px 0;display:block;";
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        range.insertNode(img);
-        range.setStartAfter(img);
-        range.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      }
-      // blur로 자동 저장 트리거
-    }
-  }, [blocks]);
+  const handleMovePage = async (id: number, dir: "up" | "down") => {
+    const idx = pages.findIndex((p) => p.id === id);
+    if (dir === "up" && idx === 0) return;
+    if (dir === "down" && idx === pages.length - 1) return;
+    const next = [...pages];
+    const si = dir === "up" ? idx - 1 : idx + 1;
+    [next[idx], next[si]] = [next[si], next[idx]];
+    setPages(next);
+    await fetch("/api/report-blocks/reorder", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: next.map((p) => p.id) }),
+    });
+  };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-20">
-        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const handleSavePageMeta = async (icon?: string) => {
+    if (!selectedPageId) return;
+    const body = icon ? { title: pageTitle, icon } : { title: pageTitle, icon: pageIcon };
+    await fetch(`/api/report-pages/${selectedPageId}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    setPages((prev) => prev.map((p) => p.id === selectedPageId ? { ...p, ...body } : p));
+    if (icon) setPageIcon(icon);
+    setEditingPageTitle(false);
+  };
 
   return (
-    <main className="max-w-3xl mx-auto px-6 py-10">
-      {/* 헤더 */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900">레포트 분석</h1>
-        {saving && <span className="text-xs text-slate-400 mt-1 block">저장 중...</span>}
-      </div>
+    <div className="flex" style={{ minHeight: "calc(100vh - 105px)" }}>
+      {/* 사이드바 토글 (모바일) */}
+      <button type="button" onClick={() => setSidebarOpen(true)}
+        className="fixed bottom-4 left-4 z-20 md:hidden w-10 h-10 bg-white border border-slate-200 rounded-full shadow-md flex items-center justify-center text-slate-600">
+        ☰
+      </button>
 
-      {/* 포맷 툴바 (관리자만) */}
-      {isAdmin && (
-        <div className="sticky top-[105px] md:top-[64px] z-20 mb-4">
-          <FormatBar colorPickerRef={colorPickerRef} />
-        </div>
-      )}
+      <Sidebar
+        pages={pages} selectedId={selectedPageId} isAdmin={isAdmin}
+        onSelect={(id) => { setSelectedPageId(id); setSidebarOpen(false); }}
+        onAdd={handleAddPage}
+        onRename={handleRenamePage}
+        onDelete={handleDeletePage}
+        onMove={handleMovePage}
+        sidebarOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen((v) => !v)}
+      />
 
-      {/* 블록 목록 */}
-      <div className="space-y-1 pl-8 pr-16">
-        {blocks.length === 0 && isAdmin && (
-          <p className="text-slate-300 text-sm py-8 text-center">아래 버튼으로 첫 블록을 추가해보세요.</p>
+      {/* 메인 컨텐츠 */}
+      <div className="flex-1 overflow-auto min-w-0">
+        {/* 포맷 툴바 */}
+        {isAdmin && selectedPageId && (
+          <div className="sticky top-0 z-10 bg-white border-b border-slate-200">
+            <FormatBar />
+          </div>
         )}
-        {blocks.length === 0 && !isAdmin && (
-          <p className="text-slate-400 text-sm py-8 text-center">아직 작성된 내용이 없습니다.</p>
-        )}
-        {blocks.map((block, idx) => (
-          <BlockItem
-            key={block.id}
-            block={block}
-            isAdmin={isAdmin}
-            isFirst={idx === 0}
-            isLast={idx === blocks.length - 1}
-            onSave={handleSave}
-            onDelete={handleDelete}
-            onMoveUp={(id) => move(id, "up")}
-            onMoveDown={(id) => move(id, "down")}
-            onAddAfter={(id) => addBlock("text", id)}
-            onImageUpload={handleImageUpload}
-          />
-        ))}
-      </div>
 
-      {/* 블록 추가 버튼 (관리자) */}
-      {isAdmin && (
-        <div className="mt-6 pl-8 relative">
-          <button
-            type="button"
-            onClick={() => setAddMenu((v) => !v)}
-            className="flex items-center gap-2 px-4 py-2 border border-dashed border-slate-300 rounded-lg text-slate-400 text-sm hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-colors w-full"
-          >
-            <span className="text-lg leading-none">+</span>
-            <span>블록 추가</span>
-          </button>
-          {addMenu && (
-            <div className="absolute left-8 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-2 z-20 grid grid-cols-2 gap-1 w-72">
-              {(Object.entries(TYPE_LABELS) as [BlockType, string][]).map(([type, label]) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => addBlock(type)}
-                  className="text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
-                >
-                  <span className="mr-2">
-                    {type === "h1" ? "H1" : type === "h2" ? "H2" : type === "h3" ? "H3" :
-                     type === "image" ? "🖼" : type === "divider" ? "—" :
-                     type === "quote" ? "❝" : "¶"}
-                  </span>
-                  {label}
-                </button>
-              ))}
+        {selectedPageId && selectedPage ? (
+          <div className="max-w-3xl mx-auto px-8 py-10">
+            {/* 페이지 제목 영역 */}
+            <div className="mb-8 group">
+              <div className="flex items-start gap-3">
+                {/* 아이콘 */}
+                <div className="relative">
+                  <button type="button" onClick={() => isAdmin && setShowIconPicker((v) => !v)}
+                    className={`text-4xl leading-none ${isAdmin ? "hover:opacity-70 cursor-pointer" : "cursor-default"}`}>
+                    {pageIcon}
+                  </button>
+                  {showIconPicker && isAdmin && (
+                    <div className="absolute top-12 left-0 bg-white border border-slate-200 rounded-xl shadow-lg p-2 z-20 flex flex-wrap gap-1 w-48">
+                      {PAGE_ICONS.map((ic) => (
+                        <button key={ic} type="button" onClick={() => { setShowIconPicker(false); handleSavePageMeta(ic); }}
+                          className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 text-xl">{ic}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* 제목 */}
+                <div className="flex-1 min-w-0">
+                  {isAdmin && editingPageTitle ? (
+                    <input autoFocus value={pageTitle} onChange={(e) => setPageTitle(e.target.value)}
+                      onBlur={() => handleSavePageMeta()}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleSavePageMeta(); if (e.key === "Escape") setEditingPageTitle(false); }}
+                      className="w-full text-4xl font-bold text-slate-900 bg-transparent border-b-2 border-blue-400 outline-none py-1"
+                    />
+                  ) : (
+                    <h1 onClick={() => isAdmin && setEditingPageTitle(true)}
+                      className={`text-4xl font-bold text-slate-900 py-1 ${isAdmin ? "cursor-text hover:opacity-80" : ""} ${!pageTitle ? "text-slate-300" : ""}`}>
+                      {pageTitle || (isAdmin ? "제목 없음" : "")}
+                    </h1>
+                  )}
+                </div>
+              </div>
             </div>
-          )}
-        </div>
-      )}
-    </main>
+
+            {/* 블록 에디터 */}
+            <BlockEditor key={selectedPageId} pageId={selectedPageId} isAdmin={isAdmin} />
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full py-20 text-slate-400">
+            {pages.length === 0
+              ? <>{isAdmin && <button type="button" onClick={handleAddPage} className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">+ 첫 페이지 만들기</button>}</>
+              : <p className="text-sm">왼쪽에서 페이지를 선택하세요</p>}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
