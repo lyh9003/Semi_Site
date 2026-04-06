@@ -703,7 +703,7 @@ export default function ReportAnalysisPage() {
         )}
 
         {selectedPageId && selectedPage ? (
-          <div className="max-w-3xl mx-auto px-8 py-10">
+          <div className="px-10 py-10 max-w-5xl">
             {/* 페이지 제목 영역 */}
             <div className="mb-8 group">
               <div className="flex items-start gap-3">
