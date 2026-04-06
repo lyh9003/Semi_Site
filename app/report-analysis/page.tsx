@@ -104,140 +104,6 @@ function FormatBar() {
   );
 }
 
-// ── 블록 ──────────────────────────────────────────────────
-function BlockItem({ block, isAdmin, isFirst, isLast, onSave, onDelete, onMove, onAddAfter, onImageUpload }: {
-  block: Block; isAdmin: boolean; isFirst: boolean; isLast: boolean;
-  onSave: (id: number, content: string, type?: BlockType) => void;
-  onDelete: (id: number) => void;
-  onMove: (id: number, dir: "up" | "down") => void;
-  onAddAfter: (id: number, type: BlockType) => void;
-  onImageUpload: (blockId: number, file: File) => Promise<void>;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [hovered, setHovered] = useState(false);
-  const [showAddMenu, setShowAddMenu] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>(null);
-
-  useEffect(() => {
-    if (ref.current && block.type !== "image" && block.type !== "divider") {
-      if (ref.current.innerHTML !== block.content) ref.current.innerHTML = block.content;
-    }
-  }, [block.id]);
-
-  const schedSave = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      if (ref.current) onSave(block.id, ref.current.innerHTML);
-    }, 800);
-  };
-
-  const handlePaste = async (e: React.ClipboardEvent) => {
-    const imgs = Array.from(e.clipboardData.items)
-      .filter((i) => i.type.startsWith("image/")).map((i) => i.getAsFile()).filter(Boolean) as File[];
-    if (imgs.length) { e.preventDefault(); for (const f of imgs) await onImageUpload(block.id, f); }
-  };
-
-  const blockClass: Record<BlockType, string> = {
-    text: "text-slate-700 text-[15px] leading-7",
-    h1: "text-3xl font-bold text-slate-900 leading-tight",
-    h2: "text-2xl font-bold text-slate-800 leading-tight",
-    h3: "text-xl font-semibold text-slate-800 leading-snug",
-    quote: "text-slate-600 italic border-l-4 border-blue-400 pl-4 text-[15px] leading-7",
-    image: "", divider: "",
-  };
-
-  if (block.type === "divider") return (
-    <div className="group relative py-2" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-      <hr className="border-slate-200" />
-      {isAdmin && hovered && <BlockControls isFirst={isFirst} isLast={isLast} type={block.type}
-        onUp={() => onMove(block.id, "up")} onDown={() => onMove(block.id, "down")} onDelete={() => onDelete(block.id)} />}
-      {isAdmin && <AddLine show={showAddMenu} onEnter={() => setShowAddMenu(true)} onLeave={() => setShowAddMenu(false)} onAdd={(t) => onAddAfter(block.id, t)} />}
-    </div>
-  );
-
-  if (block.type === "image") return (
-    <div className="group relative" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-      {block.content
-        // eslint-disable-next-line @next/next/no-img-element
-        ? <img src={block.content} alt="" className="max-w-full rounded-lg my-1" />
-        : isAdmin
-          ? <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors text-slate-400">
-              <span className="text-2xl mb-1">🖼</span><span className="text-sm">클릭 또는 Ctrl+V로 이미지 추가</span>
-              <input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) await onImageUpload(block.id, f); }} />
-            </label>
-          : null}
-      {isAdmin && hovered && block.content && (
-        <label className="absolute top-2 left-2 px-2 py-1 text-xs bg-black/50 text-white rounded cursor-pointer hover:bg-black/70 transition-colors">
-          이미지 변경<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) await onImageUpload(block.id, f); }} />
-        </label>
-      )}
-      {isAdmin && hovered && <BlockControls isFirst={isFirst} isLast={isLast} type={block.type}
-        onUp={() => onMove(block.id, "up")} onDown={() => onMove(block.id, "down")} onDelete={() => onDelete(block.id)} />}
-      {isAdmin && <AddLine show={showAddMenu} onEnter={() => setShowAddMenu(true)} onLeave={() => setShowAddMenu(false)} onAdd={(t) => onAddAfter(block.id, t)} />}
-    </div>
-  );
-
-  return (
-    <div className="group relative" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-      {isAdmin && hovered && (
-        <select value={block.type} title="블록 타입"
-          onChange={(e) => onSave(block.id, ref.current?.innerHTML ?? block.content, e.target.value as BlockType)}
-          className="absolute -left-7 top-1 text-[10px] border border-slate-200 rounded bg-white text-slate-400 cursor-pointer w-6 h-6 p-0 text-center opacity-70 hover:opacity-100">
-          {(Object.keys(TYPE_LABELS) as BlockType[]).filter(t => t !== "divider" && t !== "image").map((t) => (
-            <option key={t} value={t}>{TYPE_LABELS[t].label}</option>
-          ))}
-        </select>
-      )}
-      <div ref={ref} contentEditable={isAdmin} suppressContentEditableWarning
-        onInput={schedSave}
-        onBlur={() => { if (timer.current) clearTimeout(timer.current); if (ref.current) onSave(block.id, ref.current.innerHTML); }}
-        onPaste={handlePaste}
-        data-placeholder={isAdmin ? (TYPE_LABELS[block.type]?.label + "...") : undefined}
-        className={`outline-none w-full min-h-[1.5em] py-0.5 break-words ${blockClass[block.type]} ${isAdmin ? "cursor-text empty:before:content-[attr(data-placeholder)] empty:before:text-slate-300" : ""}`}
-        dangerouslySetInnerHTML={!isAdmin ? { __html: autoLink(block.content) } : undefined}
-      />
-      {isAdmin && hovered && <BlockControls isFirst={isFirst} isLast={isLast} type={block.type}
-        onUp={() => onMove(block.id, "up")} onDown={() => onMove(block.id, "down")} onDelete={() => onDelete(block.id)} />}
-      {isAdmin && <AddLine show={showAddMenu} onEnter={() => setShowAddMenu(true)} onLeave={() => setShowAddMenu(false)} onAdd={(t) => onAddAfter(block.id, t)} />}
-    </div>
-  );
-}
-
-function BlockControls({ isFirst, isLast, type, onUp, onDown, onDelete }: {
-  isFirst: boolean; isLast: boolean; type: string;
-  onUp: () => void; onDown: () => void; onDelete: () => void;
-}) {
-  return (
-    <div className="absolute right-0 top-0 -translate-y-0 translate-x-full pl-2 flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 shadow-sm z-10 ml-2">
-      <span className="text-[10px] text-slate-300 pr-1">{TYPE_LABELS[type as BlockType]?.icon}</span>
-      <button type="button" onClick={onUp} disabled={isFirst} className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:bg-slate-100 disabled:opacity-20 text-xs">↑</button>
-      <button type="button" onClick={onDown} disabled={isLast} className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:bg-slate-100 disabled:opacity-20 text-xs">↓</button>
-      <button type="button" onClick={onDelete} className="w-5 h-5 flex items-center justify-center rounded text-red-400 hover:bg-red-50 text-xs">✕</button>
-    </div>
-  );
-}
-
-function AddLine({ show, onEnter, onLeave, onAdd }: {
-  show: boolean; onEnter: () => void; onLeave: () => void; onAdd: (t: BlockType) => void;
-}) {
-  return (
-    <div className="relative h-3 -mb-1 z-10" onMouseEnter={onEnter} onMouseLeave={onLeave}>
-      {show && (
-        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex items-center">
-          <div className="flex-1 h-px bg-blue-300" />
-          <div className="relative mx-2">
-            <button type="button" className="w-5 h-5 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center hover:bg-blue-600 shadow-sm peer">+</button>
-            <div className="absolute left-1/2 -translate-x-1/2 top-6 bg-white border border-slate-200 rounded-xl shadow-lg p-1.5 z-20 grid grid-cols-2 gap-0.5 w-48 hidden peer-focus:grid">
-              {/* dropdown not needed; just add text block on click */}
-            </div>
-          </div>
-          <div className="flex-1 h-px bg-blue-300" />
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── 사이드바 ──────────────────────────────────────────────
 function PageTreeItem({ page, pages, depth, selectedId, isAdmin, expandedIds, onToggleExpand, onSelect, onAdd, onRename, onDelete, onMove }: {
   page: Page; pages: Page[]; depth: number;
@@ -391,12 +257,197 @@ function Sidebar({ pages, selectedId, isAdmin, onSelect, onAdd, onRename, onDele
   );
 }
 
+// ── 슬래시 메뉴 ───────────────────────────────────────────
+const SLASH_ITEMS: { type: BlockType; label: string; desc: string; icon: string }[] = [
+  { type: "text",    label: "텍스트",  desc: "일반 텍스트",       icon: "¶"  },
+  { type: "h1",      label: "제목 1",  desc: "대제목",            icon: "H1" },
+  { type: "h2",      label: "제목 2",  desc: "중제목",            icon: "H2" },
+  { type: "h3",      label: "제목 3",  desc: "소제목",            icon: "H3" },
+  { type: "quote",   label: "인용",    desc: "인용 블록",         icon: "❝"  },
+  { type: "image",   label: "이미지",  desc: "이미지 업로드",     icon: "🖼"  },
+  { type: "divider", label: "구분선",  desc: "수평 구분선",       icon: "—"  },
+];
+
+// ── 블록 아이템 ────────────────────────────────────────────
+interface BlockItemProps {
+  block: Block;
+  isAdmin: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  onSave: (id: number, content: string, type?: BlockType) => void;
+  onDelete: (id: number) => void;
+  onMove: (id: number, dir: "up" | "down") => void;
+  onEnter: (id: number, currentHtml: string) => void;
+  onBackspaceEmpty: (id: number) => void;
+  onImageUpload: (blockId: number, file: File) => Promise<void>;
+}
+
+function BlockItem({ block, isAdmin, isFirst, isLast, onSave, onDelete, onMove, onEnter, onBackspaceEmpty, onImageUpload }: BlockItemProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState(false);
+  const [slashMenu, setSlashMenu] = useState(false);
+  const [slashIdx, setSlashIdx] = useState(0);
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>(null);
+
+  useEffect(() => {
+    if (ref.current && block.type !== "image" && block.type !== "divider") {
+      if (ref.current.innerHTML !== block.content) ref.current.innerHTML = block.content;
+    }
+  }, [block.id]);
+
+  const schedSave = () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      if (ref.current) onSave(block.id, ref.current.innerHTML);
+    }, 800);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // 슬래시 메뉴가 열려있을 때
+    if (slashMenu) {
+      if (e.key === "ArrowDown")   { e.preventDefault(); setSlashIdx((i) => Math.min(i + 1, SLASH_ITEMS.length - 1)); return; }
+      if (e.key === "ArrowUp")     { e.preventDefault(); setSlashIdx((i) => Math.max(i - 1, 0)); return; }
+      if (e.key === "Enter")       { e.preventDefault(); applySlashType(SLASH_ITEMS[slashIdx].type); return; }
+      if (e.key === "Escape")      { setSlashMenu(false); return; }
+    }
+    // Enter → 새 블록
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      const html = ref.current?.innerHTML ?? "";
+      onEnter(block.id, html);
+      return;
+    }
+    // Backspace on empty → 블록 삭제
+    if (e.key === "Backspace") {
+      const isEmpty = !ref.current?.textContent?.trim() && !ref.current?.querySelector("img");
+      if (isEmpty) { e.preventDefault(); onBackspaceEmpty(block.id); }
+    }
+  };
+
+  const handleInput = () => {
+    schedSave();
+    const text = ref.current?.textContent ?? "";
+    if (text === "/") { setSlashMenu(true); setSlashIdx(0); }
+    else if (!text.startsWith("/")) setSlashMenu(false);
+  };
+
+  const applySlashType = (type: BlockType) => {
+    setSlashMenu(false);
+    if (ref.current) ref.current.innerHTML = "";
+    onSave(block.id, "", type);
+    setTimeout(() => ref.current?.focus(), 10);
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const imgs = Array.from(e.clipboardData.items)
+      .filter((i) => i.type.startsWith("image/")).map((i) => i.getAsFile()).filter(Boolean) as File[];
+    if (imgs.length) { e.preventDefault(); for (const f of imgs) await onImageUpload(block.id, f); }
+  };
+
+  const blockClass: Record<BlockType, string> = {
+    text:    "text-slate-700 text-[15px] leading-7",
+    h1:      "text-3xl font-bold text-slate-900 leading-tight mt-6",
+    h2:      "text-2xl font-bold text-slate-800 leading-tight mt-4",
+    h3:      "text-xl font-semibold text-slate-800 leading-snug mt-3",
+    quote:   "text-slate-600 italic border-l-4 border-blue-300 pl-4 text-[15px] leading-7",
+    image:   "",
+    divider: "",
+  };
+
+  const placeholder: Record<BlockType, string> = {
+    text: "글을 입력하거나 '/'로 명령어를 입력하세요",
+    h1: "제목 1", h2: "제목 2", h3: "제목 3",
+    quote: "인용문 입력...", image: "", divider: "",
+  };
+
+  if (block.type === "divider") return (
+    <div className="group relative py-3" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      <hr className="border-slate-200" />
+      {isAdmin && hovered && (
+        <div className="absolute right-0 top-1/2 -translate-y-1/2 flex gap-0.5 bg-white border border-slate-200 rounded-lg px-1 py-0.5 shadow-sm">
+          <button type="button" onClick={() => onMove(block.id, "up")} disabled={isFirst} className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20 text-xs">↑</button>
+          <button type="button" onClick={() => onMove(block.id, "down")} disabled={isLast} className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20 text-xs">↓</button>
+          <button type="button" onClick={() => onDelete(block.id)} className="w-5 h-5 flex items-center justify-center text-red-400 hover:text-red-600 text-xs">✕</button>
+        </div>
+      )}
+    </div>
+  );
+
+  if (block.type === "image") return (
+    <div className="group relative py-1" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      {block.content
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={block.content} alt="" className="max-w-full rounded-lg" />
+        : isAdmin
+          ? <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-colors text-slate-400">
+              <span className="text-2xl mb-1">🖼</span><span className="text-sm">클릭 또는 Ctrl+V</span>
+              <input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) await onImageUpload(block.id, f); }} />
+            </label>
+          : null}
+      {isAdmin && hovered && (
+        <div className="absolute right-0 top-2 flex gap-0.5 bg-white border border-slate-200 rounded-lg px-1 py-0.5 shadow-sm">
+          {block.content && <label className="px-2 text-xs text-slate-500 hover:text-slate-700 cursor-pointer flex items-center">변경<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (f) await onImageUpload(block.id, f); }} /></label>}
+          <button type="button" onClick={() => onMove(block.id, "up")} disabled={isFirst} className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20 text-xs">↑</button>
+          <button type="button" onClick={() => onMove(block.id, "down")} disabled={isLast} className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20 text-xs">↓</button>
+          <button type="button" onClick={() => onDelete(block.id)} className="w-5 h-5 flex items-center justify-center text-red-400 hover:text-red-600 text-xs">✕</button>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="group relative" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      {/* 왼쪽 핸들 (관리자 hover) */}
+      {isAdmin && hovered && (
+        <div className="absolute -left-7 top-1 flex flex-col gap-0.5 opacity-40 hover:opacity-100">
+          <button type="button" onClick={() => onMove(block.id, "up")} disabled={isFirst} className="w-5 h-4 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20 text-xs leading-none">↑</button>
+          <button type="button" onClick={() => onMove(block.id, "down")} disabled={isLast} className="w-5 h-4 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20 text-xs leading-none">↓</button>
+        </div>
+      )}
+      {/* 오른쪽 삭제 버튼 */}
+      {isAdmin && hovered && (
+        <button type="button" onClick={() => onDelete(block.id)}
+          className="absolute -right-6 top-1 w-5 h-5 flex items-center justify-center text-slate-300 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+      )}
+
+      <div
+        ref={ref}
+        data-block-id={block.id}
+        contentEditable={isAdmin}
+        suppressContentEditableWarning
+        onKeyDown={handleKeyDown}
+        onInput={handleInput}
+        onBlur={() => { if (saveTimer.current) clearTimeout(saveTimer.current); if (ref.current) onSave(block.id, ref.current.innerHTML); setSlashMenu(false); }}
+        onPaste={handlePaste}
+        data-placeholder={isAdmin ? placeholder[block.type] : undefined}
+        className={`outline-none w-full min-h-[1.6em] break-words ${blockClass[block.type]} ${isAdmin ? "empty:before:content-[attr(data-placeholder)] empty:before:text-slate-300 empty:before:pointer-events-none" : ""}`}
+        dangerouslySetInnerHTML={!isAdmin ? { __html: autoLink(block.content) } : undefined}
+      />
+
+      {/* 슬래시 명령어 메뉴 */}
+      {slashMenu && (
+        <div className="absolute left-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-1 z-30 w-56">
+          <p className="text-xs text-slate-400 px-2 py-1">블록 타입 선택</p>
+          {SLASH_ITEMS.map((item, i) => (
+            <button key={item.type} type="button"
+              onMouseDown={(e) => { e.preventDefault(); applySlashType(item.type); }}
+              className={`w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm text-left transition-colors ${i === slashIdx ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"}`}>
+              <span className="w-6 text-center font-mono text-xs text-slate-500">{item.icon}</span>
+              <span className="flex-1">{item.label}</span>
+              <span className="text-xs text-slate-400">{item.desc}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 블록 에디터 ────────────────────────────────────────────
 function BlockEditor({ pageId, isAdmin }: { pageId: number; isAdmin: boolean }) {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [showTypeMenu, setShowTypeMenu] = useState(false);
+  const pendingFocus = useRef<number | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -405,21 +456,62 @@ function BlockEditor({ pageId, isAdmin }: { pageId: number; isAdmin: boolean }) 
       .then(({ data }) => { setBlocks(data ?? []); setLoading(false); });
   }, [pageId]);
 
+  // 블록 focus 처리
+  useEffect(() => {
+    if (pendingFocus.current !== null) {
+      const el = document.querySelector(`[data-block-id="${pendingFocus.current}"]`) as HTMLElement;
+      el?.focus();
+      // 커서를 끝으로
+      const range = document.createRange();
+      const sel = window.getSelection();
+      if (el && sel) { range.selectNodeContents(el); range.collapse(false); sel.removeAllRanges(); sel.addRange(range); }
+      pendingFocus.current = null;
+    }
+  });
+
   const handleSave = useCallback(async (id: number, content: string, type?: BlockType) => {
-    setSaving(true);
+    if (id < 0) return; // 아직 생성 중인 임시 블록
     const body: Record<string, string> = { content };
     if (type) body.type = type;
-    await fetch(`/api/report-blocks/${id}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
+    fetch(`/api/report-blocks/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (type) setBlocks((prev) => prev.map((b) => b.id === id ? { ...b, type, content } : b));
-    setSaving(false);
   }, []);
 
-  const handleDelete = useCallback(async (id: number) => {
-    if (!confirm("이 블록을 삭제할까요?")) return;
-    await fetch(`/api/report-blocks/${id}`, { method: "DELETE" });
+  // Enter: 현재 블록 내용 저장 + 새 블록 생성
+  const handleEnter = useCallback(async (id: number, currentHtml: string) => {
+    // 현재 블록 저장
+    fetch(`/api/report-blocks/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: currentHtml }) });
+
+    const tempId = -Date.now();
+    const idx = blocks.findIndex((b) => b.id === id);
+    const newBlock: Block = { id: tempId, type: "text", content: "", order_index: idx + 1, page_id: pageId };
+
+    // 낙관적 업데이트
+    setBlocks((prev) => { const next = [...prev]; next.splice(idx + 1, 0, newBlock); return next; });
+    pendingFocus.current = tempId;
+
+    // 서버 생성
+    const res = await fetch("/api/report-blocks", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "text", content: "", order_index: idx + 1, page_id: pageId }),
+    });
+    const { data } = await res.json();
+    setBlocks((prev) => prev.map((b) => b.id === tempId ? { ...b, id: data.id } : b));
+    pendingFocus.current = data.id;
+  }, [blocks, pageId]);
+
+  // Backspace on empty: 블록 삭제 후 이전 블록으로 포커스
+  const handleBackspaceEmpty = useCallback(async (id: number) => {
+    const idx = blocks.findIndex((b) => b.id === id);
+    const prevId = idx > 0 ? blocks[idx - 1].id : null;
     setBlocks((prev) => prev.filter((b) => b.id !== id));
+    if (prevId) pendingFocus.current = prevId;
+    if (id > 0) fetch(`/api/report-blocks/${id}`, { method: "DELETE" });
+  }, [blocks]);
+
+  const handleDelete = useCallback(async (id: number) => {
+    setBlocks((prev) => prev.filter((b) => b.id !== id));
+    if (id > 0) fetch(`/api/report-blocks/${id}`, { method: "DELETE" });
   }, []);
 
   const handleMove = useCallback(async (id: number, dir: "up" | "down") => {
@@ -430,27 +522,8 @@ function BlockEditor({ pageId, isAdmin }: { pageId: number; isAdmin: boolean }) 
     const si = dir === "up" ? idx - 1 : idx + 1;
     [next[idx], next[si]] = [next[si], next[idx]];
     setBlocks(next);
-    await fetch("/api/report-blocks/reorder", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: next.map((b) => b.id) }),
-    });
+    fetch("/api/report-blocks/reorder", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: next.map((b) => b.id) }) });
   }, [blocks]);
-
-  const addBlock = useCallback(async (type: BlockType, afterId?: number) => {
-    const idx = afterId != null ? blocks.findIndex((b) => b.id === afterId) : blocks.length - 1;
-    const res = await fetch("/api/report-blocks", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, content: "", order_index: idx + 1, page_id: pageId }),
-    });
-    const { data } = await res.json();
-    setBlocks((prev) => {
-      const insertAt = afterId != null ? prev.findIndex((b) => b.id === afterId) + 1 : prev.length;
-      const next = [...prev];
-      next.splice(insertAt, 0, data);
-      return next;
-    });
-    setShowTypeMenu(false);
-  }, [blocks, pageId]);
 
   const handleImageUpload = useCallback(async (blockId: number, file: File) => {
     const formData = new FormData();
@@ -460,72 +533,52 @@ function BlockEditor({ pageId, isAdmin }: { pageId: number; isAdmin: boolean }) 
     const { url } = await res.json();
     const block = blocks.find((b) => b.id === blockId);
     if (block?.type === "image") {
-      await fetch(`/api/report-blocks/${blockId}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: url }),
-      });
+      fetch(`/api/report-blocks/${blockId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: url }) });
       setBlocks((prev) => prev.map((b) => b.id === blockId ? { ...b, content: url } : b));
     } else {
       const img = document.createElement("img");
-      img.src = url;
-      img.style.cssText = "max-width:100%;border-radius:8px;margin:4px 0;display:block;";
+      img.src = url; img.style.cssText = "max-width:100%;border-radius:8px;margin:4px 0;display:block;";
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {
         const range = sel.getRangeAt(0);
-        range.insertNode(img);
-        range.setStartAfter(img); range.collapse(true);
+        range.insertNode(img); range.setStartAfter(img); range.collapse(true);
         sel.removeAllRanges(); sel.addRange(range);
       }
     }
   }, [blocks]);
 
   if (loading) return (
-    <div className="flex justify-center py-20">
+    <div className="flex justify-center py-10">
       <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
   return (
-    <div>
-      {saving && <p className="text-xs text-slate-400 mb-2">저장 중...</p>}
+    <div className="pl-8 pr-8">
+      {blocks.length === 0 && !isAdmin && <p className="text-slate-400 text-sm py-4">작성된 내용이 없습니다.</p>}
 
-      {/* 블록 목록 */}
-      <div className="space-y-0.5 ml-6 mr-12">
-        {blocks.length === 0 && isAdmin && (
-          <p className="text-slate-300 text-sm py-6">아래 버튼으로 첫 블록을 추가해보세요.</p>
-        )}
-        {blocks.length === 0 && !isAdmin && (
-          <p className="text-slate-400 text-sm py-6">작성된 내용이 없습니다.</p>
-        )}
+      <div className="space-y-0.5">
         {blocks.map((block, idx) => (
           <BlockItem key={block.id} block={block} isAdmin={isAdmin}
             isFirst={idx === 0} isLast={idx === blocks.length - 1}
             onSave={handleSave} onDelete={handleDelete} onMove={handleMove}
-            onAddAfter={(id, type) => addBlock(type, id)}
+            onEnter={handleEnter} onBackspaceEmpty={handleBackspaceEmpty}
             onImageUpload={handleImageUpload}
           />
         ))}
       </div>
 
-      {/* 블록 추가 */}
+      {/* 빈 영역 클릭 시 새 블록 */}
       {isAdmin && (
-        <div className="mt-4 ml-6 relative">
-          <button type="button" onClick={() => setShowTypeMenu((v) => !v)}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-            <span className="text-base leading-none">+</span> 블록 추가
-          </button>
-          {showTypeMenu && (
-            <div className="absolute left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-2 z-20 grid grid-cols-2 gap-1 w-64"
-              onMouseLeave={() => setShowTypeMenu(false)}>
-              {(Object.entries(TYPE_LABELS) as [BlockType, { label: string; icon: string }][]).map(([type, { label, icon }]) => (
-                <button key={type} type="button" onClick={() => addBlock(type)}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors text-left">
-                  <span className="w-6 text-center text-base">{icon}</span>
-                  <span>{label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <div className="min-h-[80px] cursor-text" onClick={async () => {
+          const res = await fetch("/api/report-blocks", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "text", content: "", order_index: blocks.length, page_id: pageId }),
+          });
+          const { data } = await res.json();
+          setBlocks((prev) => [...prev, data]);
+          pendingFocus.current = data.id;
+        }} />
       )}
     </div>
   );
