@@ -7,7 +7,7 @@ const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim();
 
 type BlockType = "text" | "h1" | "h2" | "h3" | "image" | "divider" | "quote";
 
-interface Page { id: number; title: string; icon: string; order_index: number; }
+interface Page { id: number; title: string; icon: string; order_index: number; parent_id: number | null; }
 interface Block { id: number; type: BlockType; content: string; order_index: number; page_id: number; }
 
 const TYPE_LABELS: Record<BlockType, { label: string; icon: string }> = {
@@ -239,88 +239,150 @@ function AddLine({ show, onEnter, onLeave, onAdd }: {
 }
 
 // ── 사이드바 ──────────────────────────────────────────────
+function PageTreeItem({ page, pages, depth, selectedId, isAdmin, expandedIds, onToggleExpand, onSelect, onAdd, onRename, onDelete, onMove }: {
+  page: Page; pages: Page[]; depth: number;
+  selectedId: number | null; isAdmin: boolean;
+  expandedIds: Set<number>;
+  onToggleExpand: (id: number) => void;
+  onSelect: (id: number) => void;
+  onAdd: (parentId: number | null) => void;
+  onRename: (id: number, title: string) => void;
+  onDelete: (id: number) => void;
+  onMove: (id: number, dir: "up" | "down") => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(page.title);
+  const children = pages.filter((p) => p.parent_id === page.id).sort((a, b) => a.order_index - b.order_index);
+  const hasChildren = children.length > 0;
+  const isExpanded = expandedIds.has(page.id);
+  const siblings = pages.filter((p) => p.parent_id === page.parent_id).sort((a, b) => a.order_index - b.order_index);
+  const sibIdx = siblings.findIndex((p) => p.id === page.id);
+
+  return (
+    <div>
+      <div className="relative" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+        style={{ paddingLeft: `${depth * 12 + 4}px` }}>
+        {editing ? (
+          <div className="flex items-center gap-1 pr-2 py-0.5">
+            <span className="w-4 flex-shrink-0" />
+            <span className="text-sm flex-shrink-0">{page.icon}</span>
+            <input autoFocus value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onBlur={() => { onRename(page.id, editTitle); setEditing(false); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { onRename(page.id, editTitle); setEditing(false); }
+                if (e.key === "Escape") { setEditTitle(page.title); setEditing(false); }
+              }}
+              className="flex-1 text-sm bg-white border border-blue-400 rounded px-1.5 py-0.5 outline-none min-w-0"
+            />
+          </div>
+        ) : (
+          <button type="button" onClick={() => onSelect(page.id)}
+            className={`w-full flex items-center gap-1 pr-1 py-1 rounded-lg text-sm transition-colors text-left group/item ${selectedId === page.id ? "bg-white shadow-sm text-slate-900 font-medium" : "text-slate-600 hover:bg-slate-200/60"}`}>
+            {/* 접기/펼치기 토글 */}
+            <span className="w-4 flex-shrink-0 flex items-center justify-center"
+              onClick={(e) => { e.stopPropagation(); if (hasChildren) onToggleExpand(page.id); }}>
+              {hasChildren
+                ? <span className={`text-slate-400 text-xs transition-transform ${isExpanded ? "rotate-90" : ""}`}>▶</span>
+                : <span className="text-slate-300 text-xs opacity-0 group-hover/item:opacity-100">▶</span>}
+            </span>
+            <span className="text-sm flex-shrink-0">{page.icon}</span>
+            <span className="flex-1 truncate">{page.title || "제목 없음"}</span>
+            {isAdmin && hovered && (
+              <span className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                <button type="button" title="하위 페이지 추가" onClick={() => { onAdd(page.id); onToggleExpand(page.id); }}
+                  className="w-4 h-4 flex items-center justify-center text-blue-400 hover:text-blue-600 text-xs font-bold">+</button>
+                <button type="button" onClick={() => onMove(page.id, "up")} disabled={sibIdx === 0}
+                  className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20 text-xs">↑</button>
+                <button type="button" onClick={() => onMove(page.id, "down")} disabled={sibIdx === siblings.length - 1}
+                  className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20 text-xs">↓</button>
+                <button type="button" onClick={() => { setEditTitle(page.title); setEditing(true); }}
+                  className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-600 text-xs">✏️</button>
+                <button type="button" onClick={() => onDelete(page.id)}
+                  className="w-4 h-4 flex items-center justify-center text-red-400 hover:text-red-600 text-xs">✕</button>
+              </span>
+            )}
+          </button>
+        )}
+      </div>
+      {/* 하위 페이지 재귀 렌더 */}
+      {isExpanded && children.map((child) => (
+        <PageTreeItem key={child.id} page={child} pages={pages} depth={depth + 1}
+          selectedId={selectedId} isAdmin={isAdmin} expandedIds={expandedIds}
+          onToggleExpand={onToggleExpand} onSelect={onSelect} onAdd={onAdd}
+          onRename={onRename} onDelete={onDelete} onMove={onMove} />
+      ))}
+    </div>
+  );
+}
+
 function Sidebar({ pages, selectedId, isAdmin, onSelect, onAdd, onRename, onDelete, onMove, sidebarOpen, onToggle }: {
   pages: Page[]; selectedId: number | null; isAdmin: boolean;
   onSelect: (id: number) => void;
-  onAdd: () => void;
+  onAdd: (parentId: number | null) => void;
   onRename: (id: number, title: string) => void;
   onDelete: (id: number) => void;
   onMove: (id: number, dir: "up" | "down") => void;
   sidebarOpen: boolean;
   onToggle: () => void;
 }) {
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+
+  const toggleExpand = (id: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // 선택된 페이지의 모든 조상을 자동 펼치기
+  useEffect(() => {
+    if (!selectedId) return;
+    const ancestors = new Set<number>();
+    let cur = pages.find((p) => p.id === selectedId);
+    while (cur?.parent_id) {
+      ancestors.add(cur.parent_id);
+      cur = pages.find((p) => p.id === cur!.parent_id);
+    }
+    if (ancestors.size) setExpandedIds((prev) => new Set([...prev, ...ancestors]));
+  }, [selectedId, pages]);
+
+  const rootPages = pages.filter((p) => !p.parent_id).sort((a, b) => a.order_index - b.order_index);
 
   return (
     <>
-      {/* 모바일 오버레이 */}
       {sidebarOpen && <div className="fixed inset-0 bg-black/30 z-20 md:hidden" onClick={onToggle} />}
-
       <aside className={`
         fixed md:sticky top-[105px] md:top-[64px] left-0 z-30
         h-[calc(100vh-105px)] md:h-[calc(100vh-64px)]
         w-60 bg-[#f7f7f5] border-r border-slate-200
-        flex flex-col overflow-hidden
-        transition-transform duration-200
+        flex flex-col overflow-hidden transition-transform duration-200
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
       `}>
-        {/* 사이드바 헤더 */}
-        <div className="px-3 py-3 border-b border-slate-200 flex items-center justify-between">
+        <div className="px-3 py-3 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">레포트 분석</span>
           <button type="button" onClick={onToggle} className="md:hidden w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:bg-slate-200 text-sm">✕</button>
         </div>
 
-        {/* 페이지 목록 */}
-        <nav className="flex-1 overflow-y-auto py-2 px-1">
-          {pages.map((page, idx) => (
-            <div key={page.id} className="relative group"
-              onMouseEnter={() => setHoveredId(page.id)}
-              onMouseLeave={() => setHoveredId(null)}>
-              {editingId === page.id ? (
-                <div className="flex items-center gap-1 px-2 py-1">
-                  <span className="text-base">{page.icon}</span>
-                  <input autoFocus value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    onBlur={() => { onRename(page.id, editTitle); setEditingId(null); }}
-                    onKeyDown={(e) => { if (e.key === "Enter") { onRename(page.id, editTitle); setEditingId(null); } if (e.key === "Escape") setEditingId(null); }}
-                    className="flex-1 text-sm bg-white border border-blue-400 rounded px-1.5 py-0.5 outline-none"
-                  />
-                </div>
-              ) : (
-                <button type="button" onClick={() => onSelect(page.id)}
-                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors text-left ${selectedId === page.id ? "bg-white shadow-sm text-slate-900 font-medium" : "text-slate-600 hover:bg-slate-200/60"}`}>
-                  <span className="text-base flex-shrink-0">{page.icon}</span>
-                  <span className="flex-1 truncate">{page.title}</span>
-                  {isAdmin && hoveredId === page.id && (
-                    <span className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <button type="button" onClick={() => onMove(page.id, "up")} disabled={idx === 0}
-                        className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20 text-xs">↑</button>
-                      <button type="button" onClick={() => onMove(page.id, "down")} disabled={idx === pages.length - 1}
-                        className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-600 disabled:opacity-20 text-xs">↓</button>
-                      <button type="button" onClick={() => { setEditTitle(page.title); setEditingId(page.id); }}
-                        className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-600 text-xs">✏️</button>
-                      <button type="button" onClick={() => onDelete(page.id)}
-                        className="w-4 h-4 flex items-center justify-center text-red-400 hover:text-red-600 text-xs">✕</button>
-                    </span>
-                  )}
-                </button>
-              )}
-            </div>
+        <nav className="flex-1 overflow-y-auto py-2">
+          {rootPages.map((page) => (
+            <PageTreeItem key={page.id} page={page} pages={pages} depth={0}
+              selectedId={selectedId} isAdmin={isAdmin} expandedIds={expandedIds}
+              onToggleExpand={toggleExpand} onSelect={onSelect} onAdd={onAdd}
+              onRename={onRename} onDelete={onDelete} onMove={onMove} />
           ))}
-          {pages.length === 0 && (
+          {rootPages.length === 0 && (
             <p className="text-xs text-slate-400 text-center py-4 px-2">페이지가 없습니다</p>
           )}
         </nav>
 
-        {/* 새 페이지 추가 */}
         {isAdmin && (
-          <div className="p-2 border-t border-slate-200">
-            <button type="button" onClick={onAdd}
+          <div className="p-2 border-t border-slate-200 flex-shrink-0">
+            <button type="button" onClick={() => onAdd(null)}
               className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-slate-500 hover:bg-slate-200/60 transition-colors">
-              <span className="text-base">+</span>
-              <span>새 페이지</span>
+              <span>+</span><span>새 페이지</span>
             </button>
           </div>
         )}
@@ -495,10 +557,11 @@ export default function ReportAnalysisPage() {
     if (selectedPage) { setPageTitle(selectedPage.title); setPageIcon(selectedPage.icon); }
   }, [selectedPageId]);
 
-  const handleAddPage = async () => {
+  const handleAddPage = async (parentId: number | null = null) => {
+    const siblings = pages.filter((p) => p.parent_id === parentId);
     const res = await fetch("/api/report-pages", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "새 페이지", icon: "📄", order_index: pages.length }),
+      body: JSON.stringify({ title: "새 페이지", icon: "📄", order_index: siblings.length, parent_id: parentId }),
     });
     const { data } = await res.json();
     setPages((prev) => [...prev, data]);
@@ -522,17 +585,29 @@ export default function ReportAnalysisPage() {
   };
 
   const handleMovePage = async (id: number, dir: "up" | "down") => {
-    const idx = pages.findIndex((p) => p.id === id);
+    const page = pages.find((p) => p.id === id);
+    if (!page) return;
+    // 같은 부모의 형제들만 대상으로 순서 변경
+    const siblings = pages
+      .filter((p) => p.parent_id === page.parent_id)
+      .sort((a, b) => a.order_index - b.order_index);
+    const idx = siblings.findIndex((p) => p.id === id);
     if (dir === "up" && idx === 0) return;
-    if (dir === "down" && idx === pages.length - 1) return;
-    const next = [...pages];
+    if (dir === "down" && idx === siblings.length - 1) return;
+    const next = [...siblings];
     const si = dir === "up" ? idx - 1 : idx + 1;
     [next[idx], next[si]] = [next[si], next[idx]];
-    setPages(next);
-    await fetch("/api/report-blocks/reorder", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: next.map((p) => p.id) }),
-    });
+    // order_index 업데이트
+    const updated = next.map((p, i) => ({ ...p, order_index: i }));
+    setPages((prev) => prev.map((p) => updated.find((u) => u.id === p.id) ?? p));
+    await Promise.all(
+      updated.map((p) =>
+        fetch(`/api/report-pages/${p.id}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order_index: p.order_index }),
+        })
+      )
+    );
   };
 
   const handleSavePageMeta = async (icon?: string) => {
@@ -557,7 +632,7 @@ export default function ReportAnalysisPage() {
       <Sidebar
         pages={pages} selectedId={selectedPageId} isAdmin={isAdmin}
         onSelect={(id) => { setSelectedPageId(id); setSidebarOpen(false); }}
-        onAdd={handleAddPage}
+        onAdd={(parentId) => handleAddPage(parentId)}
         onRename={handleRenamePage}
         onDelete={handleDeletePage}
         onMove={handleMovePage}

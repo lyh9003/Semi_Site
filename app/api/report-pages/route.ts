@@ -27,11 +27,11 @@ export async function POST(req: NextRequest) {
   if (!user || user.email?.trim() !== ADMIN_EMAIL)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { title, icon, order_index } = await req.json();
+  const { title, icon, order_index, parent_id } = await req.json();
   const service = getServiceClient();
   const { data, error } = await service
     .from("report_pages")
-    .insert({ title: title ?? "새 페이지", icon: icon ?? "📄", order_index: order_index ?? 0 })
+    .insert({ title: title ?? "새 페이지", icon: icon ?? "📄", order_index: order_index ?? 0, parent_id: parent_id ?? null })
     .select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data }, { status: 201 });
