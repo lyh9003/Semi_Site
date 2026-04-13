@@ -194,6 +194,7 @@ function RichEditor({ page, isAdmin, onContentChange }: {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const colorRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const hoveredImgRef = useRef<HTMLImageElement | null>(null);
   const [slashMenu, setSlashMenu] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
   const [slashPos, setSlashPos] = useState({ x: 0, y: 0 });
@@ -332,6 +333,26 @@ function RichEditor({ page, isAdmin, onContentChange }: {
     save();
   };
 
+  const handleMouseOver = (e: React.MouseEvent) => {
+    if (e.target instanceof HTMLImageElement) hoveredImgRef.current = e.target;
+  };
+
+  const handleMouseOut = (e: React.MouseEvent) => {
+    if (e.target instanceof HTMLImageElement) hoveredImgRef.current = null;
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    const img = hoveredImgRef.current;
+    if (!img) return;
+    e.preventDefault();
+    const currentWidth = img.offsetWidth;
+    const delta = e.deltaY > 0 ? -20 : 20;
+    const newWidth = Math.max(50, Math.min(currentWidth + delta, 1600));
+    img.style.width = `${newWidth}px`;
+    img.style.maxWidth = "none";
+    schedSave();
+  };
+
   const handlePaste = async (e: React.ClipboardEvent) => {
     const imgs = Array.from(e.clipboardData.items)
       .filter((i) => i.type.startsWith("image/")).map((i) => i.getAsFile()).filter(Boolean) as File[];
@@ -345,7 +366,7 @@ function RichEditor({ page, isAdmin, onContentChange }: {
     [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-slate-800 [&_h3]:leading-snug [&_h3]:mt-3 [&_h3]:mb-1
     [&_blockquote]:border-l-4 [&_blockquote]:border-blue-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-600
     [&_a]:text-blue-600 [&_a]:underline
-    [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-1
+    [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-1 [&_img:hover]:outline [&_img:hover]:outline-2 [&_img:hover]:outline-blue-400 [&_img:hover]:cursor-ns-resize
     [&_hr]:border-none [&_hr]:border-t [&_hr]:border-slate-200 [&_hr]:my-3
   `;
 
@@ -423,6 +444,9 @@ function RichEditor({ page, isAdmin, onContentChange }: {
               onKeyDown={handleKeyDown}
               onBlur={handleBlur}
               onPaste={handlePaste}
+              onMouseOver={handleMouseOver}
+              onMouseOut={handleMouseOut}
+              onWheel={handleWheel}
               data-placeholder="글을 입력하거나 '/'로 명령어를 입력하세요..."
               className={`outline-none min-h-[60vh] ${contentClass} empty:before:content-[attr(data-placeholder)] empty:before:text-slate-300 empty:before:pointer-events-none`}
             />
