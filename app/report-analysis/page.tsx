@@ -219,18 +219,33 @@ function RichEditor({ page, isAdmin, onContentChange }: {
     };
   }, [selectedImg, updateImgRect]);
 
-  // 드래그 핸들 mousedown
-  const startResize = (e: React.MouseEvent, side: "left" | "right") => {
+  // 테두리 드래그 리사이즈
+  const startResize = (e: React.MouseEvent, side: "left" | "right" | "bottom" | "bottom-left" | "bottom-right") => {
     if (!selectedImg) return;
     e.preventDefault();
     e.stopPropagation();
-    resizeDrag.current = { startX: e.clientX, startWidth: selectedImg.offsetWidth, side };
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = selectedImg.offsetWidth;
+    const startH = selectedImg.offsetHeight;
+    resizeDrag.current = { startX, startWidth: startW, side };
     const onMove = (ev: MouseEvent) => {
       if (!resizeDrag.current || !selectedImg) return;
-      const dx = ev.clientX - resizeDrag.current.startX;
-      const newW = Math.max(50, resizeDrag.current.startWidth + (resizeDrag.current.side === "right" ? dx : -dx));
-      selectedImg.style.width = `${newW}px`;
-      selectedImg.style.maxWidth = "none";
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      let newW = startW;
+      let newH = startH;
+      if (side === "right" || side === "bottom-right") newW = Math.max(50, startW + dx);
+      if (side === "left" || side === "bottom-left") newW = Math.max(50, startW - dx);
+      if (side === "bottom" || side === "bottom-left" || side === "bottom-right") newH = Math.max(30, startH + dy);
+      if (side !== "bottom") {
+        selectedImg.style.width = `${newW}px`;
+        selectedImg.style.maxWidth = "none";
+      }
+      if (side === "bottom" || side === "bottom-left" || side === "bottom-right") {
+        selectedImg.style.height = `${newH}px`;
+        selectedImg.style.objectFit = "fill";
+      }
       setImgRect(selectedImg.getBoundingClientRect());
     };
     const onUp = () => {
@@ -500,31 +515,32 @@ function RichEditor({ page, isAdmin, onContentChange }: {
                 ))}
               </div>
             )}
-            {/* 이미지 리사이즈 오버레이 */}
+            {/* 이미지 리사이즈 오버레이 — 테두리가 리사이즈 존 */}
             {selectedImg && imgRect && (
               <div
-                className="fixed pointer-events-none z-40"
+                className="fixed z-40 pointer-events-none"
                 style={{ left: imgRect.left, top: imgRect.top, width: imgRect.width, height: imgRect.height }}
               >
-                {/* 파란 테두리 */}
+                {/* 왼쪽 테두리 */}
+                <div className="absolute inset-y-0 left-0 w-2 cursor-ew-resize pointer-events-auto bg-blue-500/60 rounded-l"
+                  onMouseDown={(e) => startResize(e, "left")} />
+                {/* 오른쪽 테두리 */}
+                <div className="absolute inset-y-0 right-0 w-2 cursor-ew-resize pointer-events-auto bg-blue-500/60 rounded-r"
+                  onMouseDown={(e) => startResize(e, "right")} />
+                {/* 하단 테두리 */}
+                <div className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize pointer-events-auto bg-blue-500/60 rounded-b"
+                  onMouseDown={(e) => startResize(e, "bottom")} />
+                {/* 우하단 코너 */}
+                <div className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize pointer-events-auto bg-blue-500 rounded-br"
+                  onMouseDown={(e) => startResize(e, "bottom-right")} />
+                {/* 좌하단 코너 */}
+                <div className="absolute bottom-0 left-0 w-4 h-4 cursor-nesw-resize pointer-events-auto bg-blue-500 rounded-bl"
+                  onMouseDown={(e) => startResize(e, "bottom-left")} />
+                {/* 얇은 전체 테두리선 */}
                 <div className="absolute inset-0 border-2 border-blue-500 rounded pointer-events-none" />
-                {/* 왼쪽 핸들 */}
-                <div
-                  className="absolute top-1/2 -left-2 -translate-y-1/2 w-4 h-8 bg-blue-500 rounded cursor-ew-resize pointer-events-auto flex items-center justify-center"
-                  onMouseDown={(e) => startResize(e, "left")}
-                >
-                  <div className="w-0.5 h-4 bg-white rounded" />
-                </div>
-                {/* 오른쪽 핸들 */}
-                <div
-                  className="absolute top-1/2 -right-2 -translate-y-1/2 w-4 h-8 bg-blue-500 rounded cursor-ew-resize pointer-events-auto flex items-center justify-center"
-                  onMouseDown={(e) => startResize(e, "right")}
-                >
-                  <div className="w-0.5 h-4 bg-white rounded" />
-                </div>
-                {/* 너비 표시 */}
-                <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
-                  {Math.round(imgRect.width)}px
+                {/* 크기 표시 */}
+                <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-700 text-white text-xs px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
+                  {Math.round(imgRect.width)} × {Math.round(imgRect.height)}
                 </div>
               </div>
             )}
