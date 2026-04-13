@@ -194,10 +194,54 @@ function RichEditor({ page, isAdmin, onContentChange }: {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const colorRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const hoveredImgRef = useRef<HTMLImageElement | null>(null);
   const [slashMenu, setSlashMenu] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
   const [slashPos, setSlashPos] = useState({ x: 0, y: 0 });
+
+  // 이미지 리사이즈 상태
+  const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
+  const [imgRect, setImgRect] = useState<DOMRect | null>(null);
+  const resizeDrag = useRef<{ startX: number; startWidth: number; side: "left" | "right" } | null>(null);
+
+  // 선택된 이미지의 rect 업데이트 (스크롤/리사이즈 대응)
+  const updateImgRect = useCallback(() => {
+    if (selectedImg) setImgRect(selectedImg.getBoundingClientRect());
+  }, [selectedImg]);
+
+  useEffect(() => {
+    if (!selectedImg) return;
+    updateImgRect();
+    window.addEventListener("scroll", updateImgRect, true);
+    window.addEventListener("resize", updateImgRect);
+    return () => {
+      window.removeEventListener("scroll", updateImgRect, true);
+      window.removeEventListener("resize", updateImgRect);
+    };
+  }, [selectedImg, updateImgRect]);
+
+  // 드래그 핸들 mousedown
+  const startResize = (e: React.MouseEvent, side: "left" | "right") => {
+    if (!selectedImg) return;
+    e.preventDefault();
+    e.stopPropagation();
+    resizeDrag.current = { startX: e.clientX, startWidth: selectedImg.offsetWidth, side };
+    const onMove = (ev: MouseEvent) => {
+      if (!resizeDrag.current || !selectedImg) return;
+      const dx = ev.clientX - resizeDrag.current.startX;
+      const newW = Math.max(50, resizeDrag.current.startWidth + (resizeDrag.current.side === "right" ? dx : -dx));
+      selectedImg.style.width = `${newW}px`;
+      selectedImg.style.maxWidth = "none";
+      setImgRect(selectedImg.getBoundingClientRect());
+    };
+    const onUp = () => {
+      resizeDrag.current = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      schedSave();
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
 
   // 페이지 전환 시 내용 로드
   useEffect(() => {
@@ -333,24 +377,14 @@ function RichEditor({ page, isAdmin, onContentChange }: {
     save();
   };
 
-  const handleMouseOver = (e: React.MouseEvent) => {
-    if (e.target instanceof HTMLImageElement) hoveredImgRef.current = e.target;
-  };
-
-  const handleMouseOut = (e: React.MouseEvent) => {
-    if (e.target instanceof HTMLImageElement) hoveredImgRef.current = null;
-  };
-
-  const handleWheel = (e: React.WheelEvent) => {
-    const img = hoveredImgRef.current;
-    if (!img) return;
-    e.preventDefault();
-    const currentWidth = img.offsetWidth;
-    const delta = e.deltaY > 0 ? -20 : 20;
-    const newWidth = Math.max(50, Math.min(currentWidth + delta, 1600));
-    img.style.width = `${newWidth}px`;
-    img.style.maxWidth = "none";
-    schedSave();
+  const handleEditorClick = (e: React.MouseEvent) => {
+    if (e.target instanceof HTMLImageElement) {
+      setSelectedImg(e.target);
+      setImgRect(e.target.getBoundingClientRect());
+    } else {
+      setSelectedImg(null);
+      setImgRect(null);
+    }
   };
 
   const handlePaste = async (e: React.ClipboardEvent) => {
@@ -366,7 +400,7 @@ function RichEditor({ page, isAdmin, onContentChange }: {
     [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-slate-800 [&_h3]:leading-snug [&_h3]:mt-3 [&_h3]:mb-1
     [&_blockquote]:border-l-4 [&_blockquote]:border-blue-300 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-slate-600
     [&_a]:text-blue-600 [&_a]:underline
-    [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-1 [&_img:hover]:outline [&_img:hover]:outline-2 [&_img:hover]:outline-blue-400 [&_img:hover]:cursor-ns-resize
+    [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-1 [&_img]:cursor-pointer
     [&_hr]:border-none [&_hr]:border-t [&_hr]:border-slate-200 [&_hr]:my-3
   `;
 
@@ -444,9 +478,7 @@ function RichEditor({ page, isAdmin, onContentChange }: {
               onKeyDown={handleKeyDown}
               onBlur={handleBlur}
               onPaste={handlePaste}
-              onMouseOver={handleMouseOver}
-              onMouseOut={handleMouseOut}
-              onWheel={handleWheel}
+              onClick={handleEditorClick}
               data-placeholder="글을 입력하거나 '/'로 명령어를 입력하세요..."
               className={`outline-none min-h-[60vh] ${contentClass} empty:before:content-[attr(data-placeholder)] empty:before:text-slate-300 empty:before:pointer-events-none`}
             />
@@ -466,6 +498,34 @@ function RichEditor({ page, isAdmin, onContentChange }: {
                     <span className="text-xs text-slate-400">{item.desc}</span>
                   </button>
                 ))}
+              </div>
+            )}
+            {/* 이미지 리사이즈 오버레이 */}
+            {selectedImg && imgRect && (
+              <div
+                className="fixed pointer-events-none z-40"
+                style={{ left: imgRect.left, top: imgRect.top, width: imgRect.width, height: imgRect.height }}
+              >
+                {/* 파란 테두리 */}
+                <div className="absolute inset-0 border-2 border-blue-500 rounded pointer-events-none" />
+                {/* 왼쪽 핸들 */}
+                <div
+                  className="absolute top-1/2 -left-2 -translate-y-1/2 w-4 h-8 bg-blue-500 rounded cursor-ew-resize pointer-events-auto flex items-center justify-center"
+                  onMouseDown={(e) => startResize(e, "left")}
+                >
+                  <div className="w-0.5 h-4 bg-white rounded" />
+                </div>
+                {/* 오른쪽 핸들 */}
+                <div
+                  className="absolute top-1/2 -right-2 -translate-y-1/2 w-4 h-8 bg-blue-500 rounded cursor-ew-resize pointer-events-auto flex items-center justify-center"
+                  onMouseDown={(e) => startResize(e, "right")}
+                >
+                  <div className="w-0.5 h-4 bg-white rounded" />
+                </div>
+                {/* 너비 표시 */}
+                <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
+                  {Math.round(imgRect.width)}px
+                </div>
               </div>
             )}
           </>
