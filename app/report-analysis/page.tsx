@@ -147,8 +147,12 @@ function Sidebar({ pages, selectedId, isAdmin, onSelect, onAdd, onRename, onDele
 
   const rootPages = pages.filter((p) => !p.parent_id).sort((a, b) => a.order_index - b.order_index);
   const trimmed = query.trim().toLowerCase();
+  const stripHtml = (html: string) => html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   const searchResults = trimmed
-    ? pages.filter((p) => p.title.toLowerCase().includes(trimmed)).sort((a, b) => a.order_index - b.order_index)
+    ? pages.filter((p) =>
+        p.title.toLowerCase().includes(trimmed) ||
+        stripHtml(p.content || "").toLowerCase().includes(trimmed)
+      ).sort((a, b) => a.order_index - b.order_index)
     : [];
 
   return (
