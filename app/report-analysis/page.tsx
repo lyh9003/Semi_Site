@@ -683,7 +683,7 @@ export default function ReportAnalysisPage() {
   };
 
   return (
-    <div className="flex" style={{ minHeight: "calc(100vh - 105px)" }}>
+    <div className="flex h-[calc(100vh-105px)] md:h-[calc(100vh-64px)]">
       <button type="button" onClick={() => setSidebarOpen(true)}
         className="fixed bottom-4 left-4 z-20 md:hidden w-10 h-10 bg-white border border-slate-200 rounded-full shadow-md flex items-center justify-center text-slate-600">
         ☰
