@@ -185,10 +185,12 @@ function Sidebar({ pages, selectedId, isAdmin, onSelect, onAdd, onRename, onDele
 }
 
 // ── 리치 에디터 (단일 contenteditable) ──────────────────────
-function RichEditor({ page, isAdmin, onContentChange }: {
+function RichEditor({ page, isAdmin, onContentChange, childPages, onSelectPage }: {
   page: Page;
   isAdmin: boolean;
   onContentChange: (id: number, content: string) => void;
+  childPages: Page[];
+  onSelectPage: (id: number) => void;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -551,6 +553,33 @@ function RichEditor({ page, isAdmin, onContentChange }: {
             dangerouslySetInnerHTML={{ __html: autoLink(page.content || "") }}
           />
         )}
+
+        {/* 하위 페이지 카드 */}
+        {childPages.length > 0 && (
+          <div className="px-10 pb-10 mt-4">
+            <div className="border-t border-slate-100 pt-6">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">하위 페이지</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {childPages.map((child) => (
+                  <button
+                    key={child.id}
+                    type="button"
+                    onClick={() => onSelectPage(child.id)}
+                    className="text-left flex items-start gap-3 p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm transition-all group"
+                  >
+                    <span className="text-2xl leading-none mt-0.5 flex-shrink-0">{child.icon || "📄"}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 group-hover:text-blue-600 transition-colors truncate">
+                        {child.title || "제목 없음"}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">페이지 열기 →</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -705,7 +734,14 @@ export default function ReportAnalysisPage() {
             </div>
 
             {/* 리치 에디터 */}
-            <RichEditor key={selectedPageId} page={selectedPage} isAdmin={isAdmin} onContentChange={handleContentChange} />
+            <RichEditor
+              key={selectedPageId}
+              page={selectedPage}
+              isAdmin={isAdmin}
+              onContentChange={handleContentChange}
+              childPages={pages.filter((p) => p.parent_id === selectedPageId).sort((a, b) => a.order_index - b.order_index)}
+              onSelectPage={(id) => { setSelectedPageId(id); setSidebarOpen(false); }}
+            />
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full py-20 text-slate-400">
