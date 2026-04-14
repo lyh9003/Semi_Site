@@ -601,7 +601,12 @@ export default function ReportAnalysisPage() {
     supabase.auth.getUser().then(({ data }) => setIsAdmin(data.user?.email?.trim() === ADMIN_EMAIL));
     fetch("/api/report-pages").then((r) => r.json()).then(({ data }) => {
       setPages(data ?? []);
-      if (data?.length > 0) setSelectedPageId(data[0].id);
+      if (data?.length > 0) {
+        const firstRoot = data
+          .filter((p: { parent_id: number | null }) => p.parent_id === null)
+          .sort((a: { order_index: number }, b: { order_index: number }) => a.order_index - b.order_index)[0];
+        setSelectedPageId(firstRoot?.id ?? data[0].id);
+      }
     });
   }, []);
 
