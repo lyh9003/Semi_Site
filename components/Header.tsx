@@ -45,7 +45,6 @@ export default function Header() {
     { href: "/report-analysis", label: "증권 리포트 Pick" },
     { href: "/telegram", label: "텔레그램" },
     { href: "/board", label: "아카이브" },
-    { href: "https://www.notion.so/321972ad561981d7be89c0e7551c0843", label: "Notion", external: true },
   ] as { href: string; label: string; external?: boolean }[];
 
   return (
