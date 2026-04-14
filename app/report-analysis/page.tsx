@@ -32,7 +32,7 @@ const SLASH_ITEMS = [
 ];
 
 function autoLink(html: string) {
-  return html.replace(/(?<!href=["'])(https?:\/\/[^\s<"']+)/g,
+  return html.replace(/(?<!href=["'])(?<!src=["'])(https?:\/\/[^\s<"']+)/g,
     '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:#3182ce;text-decoration:underline">$1</a>');
 }
 
