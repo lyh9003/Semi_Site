@@ -203,7 +203,7 @@ function RichEditor({ page, isAdmin, onContentChange, childPages, onSelectPage }
   // 이미지 리사이즈 상태
   const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
   const [imgRect, setImgRect] = useState<DOMRect | null>(null);
-  const resizeDrag = useRef<{ startX: number; startWidth: number; side: "left" | "right" } | null>(null);
+  const resizeDrag = useRef<{ startX: number; startWidth: number; side: "left" | "right" | "bottom" | "bottom-left" | "bottom-right" } | null>(null);
 
   // 선택된 이미지의 rect 업데이트 (스크롤/리사이즈 대응)
   const updateImgRect = useCallback(() => {
