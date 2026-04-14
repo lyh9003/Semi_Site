@@ -124,6 +124,7 @@ function Sidebar({ pages, selectedId, isAdmin, onSelect, onAdd, onRename, onDele
   onToggle: () => void;
 }) {
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [query, setQuery] = useState("");
 
   const toggleExpand = (id: number) => {
     setExpandedIds((prev) => {
@@ -145,6 +146,10 @@ function Sidebar({ pages, selectedId, isAdmin, onSelect, onAdd, onRename, onDele
   }, [selectedId, pages]);
 
   const rootPages = pages.filter((p) => !p.parent_id).sort((a, b) => a.order_index - b.order_index);
+  const trimmed = query.trim().toLowerCase();
+  const searchResults = trimmed
+    ? pages.filter((p) => p.title.toLowerCase().includes(trimmed)).sort((a, b) => a.order_index - b.order_index)
+    : [];
 
   return (
     <>
@@ -160,15 +165,46 @@ function Sidebar({ pages, selectedId, isAdmin, onSelect, onAdd, onRename, onDele
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">증권 리포트 Pick</span>
           <button type="button" onClick={onToggle} className="md:hidden w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:bg-slate-200 text-sm">✕</button>
         </div>
+        {/* 검색창 */}
+        <div className="px-3 py-2 border-b border-slate-200 flex-shrink-0">
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1.5">
+            <span className="text-slate-400 text-xs">🔍</span>
+            <input
+              type="text"
+              placeholder="페이지 검색..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="flex-1 text-xs bg-transparent outline-none text-slate-700 placeholder-slate-400 min-w-0"
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery("")} className="text-slate-300 hover:text-slate-500 text-xs">✕</button>
+            )}
+          </div>
+        </div>
         <nav className="flex-1 overflow-y-auto py-2">
-          {rootPages.map((page) => (
-            <PageTreeItem key={page.id} page={page} pages={pages} depth={0}
-              selectedId={selectedId} isAdmin={isAdmin} expandedIds={expandedIds}
-              onToggleExpand={toggleExpand} onSelect={onSelect} onAdd={onAdd}
-              onRename={onRename} onDelete={onDelete} onMove={onMove} />
-          ))}
-          {rootPages.length === 0 && (
-            <p className="text-xs text-slate-400 text-center py-4 px-2">페이지가 없습니다</p>
+          {trimmed ? (
+            searchResults.length > 0 ? searchResults.map((page) => (
+              <button key={page.id} type="button" onClick={() => { onSelect(page.id); setQuery(""); }}
+                className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left rounded-lg mx-1 transition-colors ${selectedId === page.id ? "bg-white shadow-sm text-slate-900 font-medium" : "text-slate-600 hover:bg-slate-200/60"}`}
+                style={{ width: "calc(100% - 8px)" }}>
+                <span className="text-sm flex-shrink-0">{page.icon}</span>
+                <span className="flex-1 truncate">{page.title || "제목 없음"}</span>
+              </button>
+            )) : (
+              <p className="text-xs text-slate-400 text-center py-4 px-2">검색 결과가 없습니다</p>
+            )
+          ) : (
+            <>
+              {rootPages.map((page) => (
+                <PageTreeItem key={page.id} page={page} pages={pages} depth={0}
+                  selectedId={selectedId} isAdmin={isAdmin} expandedIds={expandedIds}
+                  onToggleExpand={toggleExpand} onSelect={onSelect} onAdd={onAdd}
+                  onRename={onRename} onDelete={onDelete} onMove={onMove} />
+              ))}
+              {rootPages.length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-4 px-2">페이지가 없습니다</p>
+              )}
+            </>
           )}
         </nav>
         {isAdmin && (
