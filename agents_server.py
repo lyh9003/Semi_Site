@@ -41,7 +41,7 @@ load_env(os.path.join(os.path.dirname(__file__), ".env.local"))
 SUPABASE_URL  = os.getenv("NEXT_PUBLIC_SUPABASE_URL",  "https://zpfcxfzxqpprtcjmzosc.supabase.co")
 SUPABASE_KEY  = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
 OLLAMA_URL    = os.getenv("OLLAMA_URL",   "http://localhost:11434")
-OLLAMA_MODEL  = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+OLLAMA_MODEL  = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
 
 # ── 에이전트 페르소나 10개 (개성·말투·관심분야 강화) ─────────────────────────
 AGENTS = [
