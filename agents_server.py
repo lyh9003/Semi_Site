@@ -152,7 +152,20 @@ manager = ConnectionManager()
 chat_history: List[Dict] = []
 market_context: str = ""
 
-# ── 시장 데이터 Fetch ────────────────────────────────────────────────────────
+# 랜덤 주제 주입용 - 다음 주입 시각 추적
+next_topic_inject: float = 0.0
+
+import re
+import time
+
+def strip_html(html: str) -> str:
+    """HTML 태그 제거"""
+    text = re.sub(r"<[^>]+>", " ", html or "")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+# ── 시장 데이터 Fetch (전체 소스) ────────────────────────────────────────────
 async def fetch_market_data() -> str:
     headers = {
         "apikey": SUPABASE_KEY,
@@ -163,53 +176,108 @@ async def fetch_market_data() -> str:
     parts = []
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=20) as client:
 
-            # 최신 뉴스 10건
+            # ① 최신 뉴스 20건 — 요약 + 본문 앞부분 + 키워드
             r = await client.get(f"{base}/news", headers=headers, params={
-                "select": "title,company,summary,date,keyword",
+                "select": "title,company,summary,content,keyword,date,importance",
                 "order": "date.desc,importance.desc",
-                "limit": "10",
+                "limit": "20",
             })
             if r.status_code == 200 and r.json():
-                lines = ["[최신 뉴스]"]
+                lines = ["[최신 뉴스 (중요도순)]"]
                 for n in r.json():
-                    s = (n.get("summary") or n.get("title") or "")[:90]
-                    lines.append(f"• {n.get('date','')} {n.get('company','').strip()}: {s}")
+                    summary = (n.get("summary") or "")[:120]
+                    content_head = (n.get("content") or "")[:80]
+                    kw = n.get("keyword") or ""
+                    imp = "★" * min(int(n.get("importance") or 1), 3)
+                    text = summary or content_head
+                    line = f"• {imp} {n.get('date','')} [{n.get('company','').strip()}] {text}"
+                    if kw:
+                        line += f" 키워드:{kw[:40]}"
+                    lines.append(line)
                 parts.append("\n".join(lines))
 
-            # 인기 텔레그램 메시지 10건
+            # ② 텔레그램 — 인기 15건 (원문 + 채널명 + 감성)
             r = await client.get(f"{base}/telegram_messages", headers=headers, params={
-                "select": "summary,keywords,sentiment,channel",
+                "select": "message,summary,keywords,sentiment,channel,forward_count",
                 "order": "forward_count.desc,date_utc.desc",
+                "limit": "15",
+            })
+            if r.status_code == 200 and r.json():
+                lines = ["[텔레그램 인기 메시지 (공유수순)]"]
+                for m in r.json():
+                    body = (m.get("summary") or m.get("message") or "")[:120]
+                    kw   = (m.get("keywords") or "")[:40]
+                    if body:
+                        sent  = m.get("sentiment", "?")
+                        ch    = m.get("channel", "")
+                        fwd   = m.get("forward_count", 1)
+                        line  = f"• [{sent}] 공유{fwd}회 [{ch}] {body}"
+                        if kw:
+                            line += f" #{kw}"
+                        lines.append(line)
+                parts.append("\n".join(lines))
+
+            # ③ 증권리포트 — 최신 10건 (투자의견·목표주가·키워드 포함)
+            r = await client.get(f"{base}/stock_reports", headers=headers, params={
+                "select": "title,securities_firm,one_line_summary,summary,target_price,keyword,date",
+                "order": "date.desc",
                 "limit": "10",
             })
             if r.status_code == 200 and r.json():
-                lines = ["[텔레그램 주요 메시지]"]
-                for m in r.json():
-                    s = (m.get("summary") or "")[:90]
-                    if s:
-                        lines.append(f"• [{m.get('sentiment','?')}] {s}")
+                lines = ["[증권리포트 (최신순)]"]
+                for rp in r.json():
+                    one = (rp.get("one_line_summary") or rp.get("title") or "")[:100]
+                    tp  = rp.get("target_price") or ""
+                    kw  = (rp.get("keyword") or "")[:40]
+                    line = f"• {rp.get('date','')} [{rp.get('securities_firm','')}] {one}"
+                    if tp:
+                        line += f" TP:{tp}"
+                    if kw:
+                        line += f" 키워드:{kw}"
+                    lines.append(line)
                 parts.append("\n".join(lines))
 
-            # 최신 증권리포트 5건
-            r = await client.get(f"{base}/stock_reports", headers=headers, params={
-                "select": "title,securities_firm,one_line_summary,date",
-                "order": "date.desc",
-                "limit": "5",
+            # ④ 메모리산업 분석 리포트 (report_pages) — 전 챕터 배경지식
+            r = await client.get(f"{base}/report_pages", headers=headers, params={
+                "select": "title,content,order_index",
+                "order": "order_index.asc",
+                "limit": "30",
             })
             if r.status_code == 200 and r.json():
-                lines = ["[최신 증권리포트]"]
-                for rp in r.json():
-                    s = (rp.get("one_line_summary") or rp.get("title") or "")[:90]
-                    lines.append(f"• {rp.get('date','')} [{rp.get('securities_firm','')}] {s}")
+                lines = ["[메모리산업 심층분석 — 배경지식]"]
+                for pg in r.json():
+                    raw = strip_html(pg.get("content") or "")
+                    if raw and len(raw) > 30:
+                        snippet = raw[:200]
+                        lines.append(f"▶ {pg.get('title','')}: {snippet}")
                 parts.append("\n".join(lines))
 
     except Exception as e:
         print(f"[데이터 fetch 오류] {e}")
         return market_context or "시장 데이터 없음"
 
-    return "\n\n".join(parts) if parts else "시장 데이터 없음"
+    result = "\n\n".join(parts)
+    print(f"[데이터] {len(result)}자 로드")
+    return result if result else "시장 데이터 없음"
+
+
+# ── 랜덤 토픽 주입 (대화 다양성) ────────────────────────────────────────────
+TOPIC_STARTERS = [
+    "지금 HBM 시장에서 SK하이닉스와 삼성전자 격차 어떻게 볼거야?",
+    "AI 버블이라는 말이 많은데 진짜 버블이야 아니야?",
+    "중국 CXMT가 범용 DRAM 시장 위협하는 거 어느 정도로 심각하게 봐야 해?",
+    "지금 반도체 사이클 고점이야 아직 더 올라가?",
+    "엔비디아 단일 고객 의존 리스크 어떻게 생각해?",
+    "DDR5 전환 속도가 예상보다 빠른데 이게 DRAM 수요에 어떤 영향이야?",
+    "요즘 텔레그램에서 핫한 종목 뭐야?",
+    "최근 증권사 리포트 중에 제일 눈에 띄는 게 뭐야?",
+    "NAND Flash 시장은 언제쯤 회복돼?",
+    "삼성전자 지금 매수 타이밍이야 아니야?",
+    "연준 금리 인하 속도가 반도체 수요에 미치는 영향은?",
+    "메모리 Burn Margin 지금 어느 구간이야?",
+]
 
 
 # ── 논쟁 유발 키워드 (버스트 모드 트리거) ──────────────────────────────────
@@ -235,34 +303,36 @@ async def generate_message(agent: Dict, context: str, history: List[Dict]) -> st
         f"{m['emoji']}{m['name']}: {m['message']}" for m in recent
     ) if recent else "(대화 시작)"
 
-    # 시장 데이터는 짧게 요약해서 배경 참고용으로만
-    context_short = context[:600] if context else "시장 데이터 없음"
+    # 시장 데이터 — 에이전트별로 랜덤하게 다른 섹션 강조 (다양성)
+    ctx_lines = context.split("\n\n")
+    random.shuffle(ctx_lines)
+    context_for_prompt = "\n\n".join(ctx_lines)[:3500]
 
-    # 논쟁적 발언이면 더 강하게 반응하도록
+    # 논쟁적 발언이면 더 강하게 반응
     hot = is_hot_message(last_text)
     reaction_style = (
         "강하게 찬성하거나 반박하며 논쟁을 이어가세요."
         if hot else
-        "자연스럽게 반응하거나 새로운 관점을 던지세요."
+        "자연스럽게 반응하거나 데이터를 근거로 새로운 관점을 던지세요."
     )
 
-    # 에이전트 이름 목록 (본인 제외) - 직접 언급 유도
+    # 에이전트 이름 목록 (본인 제외)
     others = [a["name"] for a in AGENTS if a["id"] != agent["id"]]
-    others_str = "·".join(others[:4])  # 일부만 힌트로
+    others_str = "·".join(random.sample(others, min(3, len(others))))
 
     prompt = (
         f"당신은 반도체·주식 채팅방의 '{agent['name']}'입니다.\n"
         f"성격: {agent['role']}\n\n"
-        f"--- 최근 대화 ---\n{history_text}\n\n"
-        f"--- 시장 배경 데이터 (필요시만 참고) ---\n{context_short}\n\n"
-        f"지금 {last_speaker}가 방금 말했습니다: \"{last_text}\"\n\n"
+        f"=== 시장 데이터 (뉴스·텔레그램·리포트·산업분석) ===\n{context_for_prompt}\n\n"
+        f"=== 최근 대화 ===\n{history_text}\n\n"
+        f"지금 {last_speaker}가 말했습니다: \"{last_text}\"\n\n"
         f"'{agent['name']}'으로서 위 발언에 반응하세요. {reaction_style}\n"
         f"규칙:\n"
-        f"1. 방금 한 말에 직접 반응이 최우선 (동의·반박·질문·비틀기)\n"
-        f"2. 1~2문장, 진짜 채팅 말투 (구어체)\n"
-        f"3. 가끔 다른 참여자 이름({others_str} 등)을 직접 부르며 말해도 됨\n"
-        f"4. 본문만 출력 (자기 이름·역할 설명 절대 금지)\n"
-        f"5. 시장 데이터를 억지로 넣지 말고, 대화 흐름을 따라갈 것\n"
+        f"1. 방금 한 말에 직접 반응 우선 (동의·반박·질문·비틀기)\n"
+        f"2. 위 시장 데이터에서 구체적 수치·사실을 꺼내 근거로 쓸 것\n"
+        f"3. 1~2문장, 진짜 채팅 말투 (구어체)\n"
+        f"4. 가끔 {others_str} 등 다른 참여자 이름 직접 호명 가능\n"
+        f"5. 본문만 출력 (자기 이름·역할 설명 금지)\n"
     )
 
     try:
@@ -360,6 +430,24 @@ async def agent_loop():
         if tick % 30 == 0:
             market_context = await fetch_market_data()
             print(f"[데이터 갱신] tick={tick} | {len(market_context)}자")
+
+        # 8~12틱(약 90초)마다 랜덤 토픽 주입 — 대화 주제 환기
+        if tick % random.randint(8, 12) == 0:
+            topic = random.choice(TOPIC_STARTERS)
+            injector = random.choice([a for a in AGENTS if a["id"] != "system"])
+            topic_msg = {
+                "type": "message",
+                "id": injector["id"],
+                "name": injector["name"],
+                "emoji": injector["emoji"],
+                "color": injector["color"],
+                "message": topic,
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
+            }
+            chat_history.append(topic_msg)
+            await manager.broadcast(topic_msg)
+            print(f"[토픽주입] {injector['name']}: {topic[:50]}")
+            await asyncio.sleep(random.uniform(4, 8))
 
         # 최근 3명 제외하고 랜덤 선택 (더 다양하게)
         recent_ids = {m["id"] for m in chat_history[-3:] if m.get("id") != "system"}
