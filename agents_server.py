@@ -409,8 +409,8 @@ async def generate_message(agent: Dict, data: Dict[str, List[str]], history: Lis
                         "options": {
                             "temperature": 0.85 + attempt * 0.05,
                             "top_p": 0.9,
-                            "num_predict": 120,
-                            "stop": ["\n\n", "규칙:", "시장 데이터:", "최근 대화:"],
+                            "num_predict": 200,
+                            "stop": ["\n\n", "규칙:", "최근 대화:", "방금 읽은"],
                         },
                     },
                 )
@@ -520,10 +520,23 @@ async def agent_loop():
             print(f"[토픽주입] {injector['name']}: {topic[:50]}")
             await asyncio.sleep(random.uniform(4, 8))
 
-        # 최근 3명 제외하고 랜덤 선택 (더 다양하게)
         recent_ids = {m["id"] for m in chat_history[-3:] if m.get("id") != "system"}
-        candidates = [a for a in AGENTS if a["id"] not in recent_ids]
-        agent = random.choice(candidates if candidates else AGENTS)
+
+        # 호명 감지: 마지막 메시지에서 특정 에이전트 이름이 언급됐으면 그 에이전트 우선
+        last_real = next((m for m in reversed(chat_history) if m.get("id") not in ("system", None)), None)
+        addressed = None
+        if last_real:
+            for a in AGENTS:
+                if a["name"] in last_real.get("message", "") and a["id"] not in recent_ids:
+                    addressed = a
+                    break
+
+        if addressed:
+            agent = addressed
+            print(f"  [호명감지] '{last_real['name']}' → '{addressed['name']}' 지목")
+        else:
+            candidates = [a for a in AGENTS if a["id"] not in recent_ids]
+            agent = random.choice(candidates if candidates else AGENTS)
 
         real_history = [m for m in chat_history if m.get("id") != "system"]
 
