@@ -306,21 +306,31 @@ def pick_agent_mode(agent: Dict) -> str:
     counts  = list(weights.values())
     return random.choices(modes, weights=counts, k=1)[0]
 
-def pick_data_for_agent(agent: Dict, data: Dict[str, List[str]]) -> str:
-    """에이전트 관심 분야에서 랜덤 2~3개 항목만 추출"""
+# 카테고리별 커서 — 매 호출마다 다른 항목을 순환
+_cursors: Dict[str, int] = {"news": 0, "telegram": 0, "reports": 0, "analysis": 0}
+
+def pick_one_item(agent: Dict, data: Dict[str, List[str]]) -> tuple[str, str]:
+    """에이전트 관심 분야에서 커서 기반으로 항목 1개 반환 (카테고리명, 내용)"""
     focus = agent.get("focus", ["news"])
-    cat   = random.choice(focus)
+    # 가끔 관심 분야 밖 카테고리도 꺼냄 (20% 확률)
+    if random.random() < 0.2:
+        cat = random.choice(["news", "telegram", "reports", "analysis"])
+    else:
+        cat = random.choice(focus)
+
     items = data.get(cat, [])
     if not items:
-        # 폴백: 다른 카테고리에서
         for c in ["news", "telegram", "reports", "analysis"]:
             if data.get(c):
-                items = data[c]
+                cat, items = c, data[c]
                 break
     if not items:
-        return "데이터 없음"
-    picked = random.sample(items, min(3, len(items)))
-    return "\n".join(picked)
+        return cat, "데이터 없음"
+
+    # 커서 전진 → 매번 다른 항목
+    idx = _cursors.get(cat, 0) % len(items)
+    _cursors[cat] = idx + 1
+    return cat, items[idx]
 
 
 # ── 대화 모드별 지시문 ────────────────────────────────────────────────────────
@@ -356,28 +366,30 @@ async def generate_message(agent: Dict, data: Dict[str, List[str]], history: Lis
         f"{m['emoji']}{m['name']}: {m['message']}" for m in recent
     ) if recent else "(대화 시작)"
 
-    # 에이전트별 특화 데이터 조각
-    data_snippet = pick_data_for_agent(agent, data)
+    # 에이전트 관심 분야에서 항목 1개 커서로 순환
+    cat, item = pick_one_item(agent, data)
+    cat_label = {"news": "뉴스", "telegram": "텔레그램", "reports": "증권리포트", "analysis": "산업분석"}.get(cat, cat)
 
     # 대화 모드 선택
-    mode         = pick_agent_mode(agent)
-    instruction  = MODE_INSTRUCTIONS[mode].format(speaker=last_speaker, last=last_text[:60])
+    mode        = pick_agent_mode(agent)
+    instruction = MODE_INSTRUCTIONS[mode].format(speaker=last_speaker, last=last_text[:60])
 
     # 호명할 상대 랜덤 선택
-    others     = [a["name"] for a in AGENTS if a["id"] != agent["id"]]
-    target     = random.choice(others)
+    others = [a["name"] for a in AGENTS if a["id"] != agent["id"]]
+    target = random.choice(others)
 
     prompt = (
         f"너는 한국 반도체·주식 채팅방의 '{agent['name']}'야.\n"
         f"성격: {agent['voice']}\n\n"
-        f"시장 데이터:\n{data_snippet}\n\n"
         f"최근 대화:\n{history_text}\n\n"
-        f"지시: {instruction}\n\n"
-        f"규칙 (반드시 지킬 것):\n"
-        f"1. 한국어로만 답변 (중국어·영어 절대 금지)\n"
+        f"방금 읽은 {cat_label}:\n\"{item}\"\n\n"
+        f"할 일: {instruction} "
+        f"단, 위 {cat_label} 내용을 직접 인용하거나 언급하면서 말해.\n\n"
+        f"규칙:\n"
+        f"1. 한국어만 (중국어·영어 금지)\n"
         f"2. 1~2문장, 반말 채팅체\n"
-        f"3. '{agent['name']}:' 같은 자기 이름 출력 금지\n"
-        f"4. 가끔 '{target}'를 이름으로 부를 것\n"
+        f"3. 자기 이름 출력 금지\n"
+        f"4. 가끔 '{target}'를 직접 불러도 됨\n"
         f"답변:"
     )
 
