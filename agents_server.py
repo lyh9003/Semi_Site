@@ -363,18 +363,18 @@ async def generate_message(agent: Dict, data: Dict[str, List[str]], history: Lis
     target = random.choice(others)
 
     prompt = (
-        f"너는 한국 반도체·주식 채팅방의 '{agent['name']}'야.\n"
-        f"성격: {agent['voice']}\n\n"
-        f"최근 대화:\n{history_text}\n\n"
-        f"방금 읽은 {cat_label}:\n\"{item}\"\n\n"
-        f"할 일: {instruction} "
-        f"단, 위 {cat_label} 내용을 직접 인용하거나 언급하면서 말해.\n\n"
-        f"규칙:\n"
-        f"1. 반드시 한국어 존댓말만 사용 (반말·중국어·영어 금지)\n"
-        f"2. 1~2문장, 자연스러운 존댓말 채팅체 (예: ~요, ~죠, ~세요, ~습니다)\n"
-        f"3. 자기 이름 출력 금지\n"
-        f"4. 가끔 '{target}'를 직접 불러도 됨\n"
-        f"답변:"
+        f"[Korean only chat]\n"
+        f"You are '{agent['name']}' in a Korean stock market chat room.\n"
+        f"Personality: {agent['voice']}\n\n"
+        f"Recent chat:\n{history_text}\n\n"
+        f"Data you just read ({cat_label}):\n\"{item}\"\n\n"
+        f"Task: {instruction} Reference the {cat_label} data above.\n\n"
+        f"STRICT RULES:\n"
+        f"- Write ONLY in Korean (한국어). No Chinese, no Japanese, no English.\n"
+        f"- Use polite Korean speech ending (~요, ~죠, ~습니다, ~세요).\n"
+        f"- 1~2 sentences only. Do NOT write your own name.\n"
+        f"- You may address '{target}' directly.\n\n"
+        f"Korean answer:"
     )
 
     def clean_response(text: str) -> str:
