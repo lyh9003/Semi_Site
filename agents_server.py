@@ -476,6 +476,21 @@ async def agent_loop():
     chat_history.append(opening)
     await manager.broadcast(opening)
 
+    # 첫 메시지: 한국어 맥락 설정 + 대화 시작
+    first_agent = random.choice(AGENTS)
+    first_msg = {
+        "type": "message",
+        "id": first_agent["id"],
+        "name": first_agent["name"],
+        "emoji": first_agent["emoji"],
+        "color": first_agent["color"],
+        "message": "현재 시황이 어떻지?",
+        "timestamp": datetime.now().strftime("%H:%M:%S"),
+    }
+    chat_history.append(first_msg)
+    await manager.broadcast(first_msg)
+    await asyncio.sleep(3)
+
     while True:
         tick += 1
 
