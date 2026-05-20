@@ -45,6 +45,7 @@ export default function Header() {
     { href: "/report-analysis", label: "증권 리포트 Pick" },
     { href: "/telegram", label: "텔레그램" },
     { href: "/board", label: "아카이브" },
+    { href: "/agents", label: "🧠 에이전트" },
   ] as { href: string; label: string; external?: boolean }[];
 
   return (
