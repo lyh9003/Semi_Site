@@ -377,43 +377,40 @@ async def generate_message(agent: Dict, data: Dict[str, List[str]], history: Lis
         f"답변:"
     )
 
-    def has_cjk(text: str) -> bool:
-        """중국어/일본어 한자 포함 여부 (한국 한자 제외)"""
-        return bool(re.search(r"[一-鿿぀-ヿ]", text))
+    def clean_response(text: str) -> str:
+        """한자·일본어 제거 후 한국어 부분만 반환"""
+        return re.sub(r"[一-鿿぀-ヿ]", "", text).strip()
 
-    for attempt in range(2):  # 중국어 섞이면 1회 재시도
-        try:
-            async with httpx.AsyncClient(timeout=35) as client:
-                r = await client.post(
-                    f"{OLLAMA_URL}/api/generate",
-                    json={
-                        "model": OLLAMA_MODEL,
-                        "prompt": prompt,
-                        "stream": False,
-                        "options": {
-                            "temperature": 0.85 + attempt * 0.05,
-                            "top_p": 0.9,
-                            "num_predict": 200,
-                            "stop": ["\n\n", "규칙:", "최근 대화:", "방금 읽은"],
-                        },
+    try:
+        async with httpx.AsyncClient(timeout=35) as client:
+            r = await client.post(
+                f"{OLLAMA_URL}/api/generate",
+                json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.85,
+                        "top_p": 0.9,
+                        "num_predict": 200,
+                        "stop": ["\n\n", "규칙:", "최근 대화:", "방금 읽은"],
                     },
-                )
-                if r.status_code == 200:
-                    text = r.json().get("response", "").strip()
-                    # "답변:" 접두어 제거
-                    text = re.sub(r"^답변[:：]?\s*", "", text).strip()
-                    # 자기 이름 접두어 제거 (예: "황소: ...")
-                    text = re.sub(rf"^{re.escape(agent['name'])}[:：]\s*", "", text).strip()
-                    lines = [l.strip() for l in text.split("\n") if l.strip()]
-                    result = " ".join(lines[:2])
-                    if result and not has_cjk(result):
-                        return result
-                    print(f"  [재시도] 한자 감지: {result[:30]}")
-        except httpx.TimeoutException:
-            print(f"  [타임아웃] {agent['name']} 35초 초과 → 건너뜀")
-            return ""
-        except Exception as e:
-            print(f"[Ollama 오류] {e}")
+                },
+            )
+            if r.status_code == 200:
+                text = r.json().get("response", "").strip()
+                # 접두어 제거
+                text = re.sub(r"^답변[:：]?\s*", "", text).strip()
+                text = re.sub(rf"^{re.escape(agent['name'])}[:：]\s*", "", text).strip()
+                lines = [l.strip() for l in text.split("\n") if l.strip()]
+                result = clean_response(" ".join(lines[:2]))
+                if len(result) >= 10:
+                    return result
+                print(f"  [스킵] 응답 너무 짧거나 비어 있음: '{result[:30]}'")
+    except httpx.TimeoutException:
+        print(f"  [타임아웃] {agent['name']} 35초 초과 → 건너뜀")
+    except Exception as e:
+        print(f"[Ollama 오류] {e}")
     return ""
 
 
