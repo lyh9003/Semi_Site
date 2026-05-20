@@ -387,7 +387,7 @@ async def generate_message(agent: Dict, data: Dict[str, List[str]], history: Lis
 
     for attempt in range(2):  # 중국어 섞이면 1회 재시도
         try:
-            async with httpx.AsyncClient(timeout=120) as client:
+            async with httpx.AsyncClient(timeout=35) as client:
                 r = await client.post(
                     f"{OLLAMA_URL}/api/generate",
                     json={
@@ -413,6 +413,9 @@ async def generate_message(agent: Dict, data: Dict[str, List[str]], history: Lis
                     if result and not has_cjk(result):
                         return result
                     print(f"  [재시도] 한자 감지: {result[:30]}")
+        except httpx.TimeoutException:
+            print(f"  [타임아웃] {agent['name']} 35초 초과 → 건너뜀")
+            return ""
         except Exception as e:
             print(f"[Ollama 오류] {e}")
     return ""
