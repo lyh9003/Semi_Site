@@ -219,23 +219,26 @@ async def fetch_market_data() -> str:
                         lines.append(line)
                 parts.append("\n".join(lines))
 
-            # ③ 증권리포트 — 최신 10건 (투자의견·목표주가·키워드 포함)
+            # ③ 증권리포트 — 최신 10건 (한줄요약 + 요약본 + 목표주가 + 키워드)
             r = await client.get(f"{base}/stock_reports", headers=headers, params={
                 "select": "title,securities_firm,one_line_summary,summary,target_price,keyword,date",
                 "order": "date.desc",
                 "limit": "10",
             })
             if r.status_code == 200 and r.json():
-                lines = ["[증권리포트 (최신순)]"]
+                lines = ["[증권리포트 (최신순 · 요약 포함)]"]
                 for rp in r.json():
-                    one = (rp.get("one_line_summary") or rp.get("title") or "")[:100]
-                    tp  = rp.get("target_price") or ""
-                    kw  = (rp.get("keyword") or "")[:40]
+                    one     = (rp.get("one_line_summary") or rp.get("title") or "")[:100]
+                    summary = (rp.get("summary") or "")[:200]
+                    tp      = rp.get("target_price") or ""
+                    kw      = (rp.get("keyword") or "")[:40]
                     line = f"• {rp.get('date','')} [{rp.get('securities_firm','')}] {one}"
                     if tp:
                         line += f" TP:{tp}"
                     if kw:
                         line += f" 키워드:{kw}"
+                    if summary:
+                        line += f"\n  요약: {summary}"
                     lines.append(line)
                 parts.append("\n".join(lines))
 
