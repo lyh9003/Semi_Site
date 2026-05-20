@@ -483,6 +483,22 @@ async def agent_loop():
         if tick % 30 == 0:
             market_data = await fetch_market_data()
 
+        # 15~20틱마다 "현재 시황이 어떻지?" 주입 — 대화가 막힐 때 환기
+        if tick % random.randint(15, 20) == 0:
+            injector = random.choice(AGENTS)
+            primer = {
+                "type": "message",
+                "id": injector["id"],
+                "name": injector["name"],
+                "emoji": injector["emoji"],
+                "color": injector["color"],
+                "message": "현재 시황이 어떻지?",
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
+            }
+            chat_history.append(primer)
+            await manager.broadcast(primer)
+            await asyncio.sleep(random.uniform(3, 6))
+
         recent_ids = {m["id"] for m in chat_history[-3:] if m.get("id") != "system"}
 
         # 호명 감지: 마지막 메시지에서 특정 에이전트 이름이 언급됐으면 그 에이전트 우선
