@@ -41,7 +41,7 @@ load_env(os.path.join(os.path.dirname(__file__), ".env.local"))
 SUPABASE_URL  = os.getenv("NEXT_PUBLIC_SUPABASE_URL",  "https://zpfcxfzxqpprtcjmzosc.supabase.co")
 SUPABASE_KEY  = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
 OLLAMA_URL    = os.getenv("OLLAMA_URL",   "http://localhost:11434")
-OLLAMA_MODEL  = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+OLLAMA_MODEL  = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 
 # ── 에이전트 페르소나 10개 (개성·말투·관심분야 강화) ─────────────────────────
 AGENTS = [
@@ -368,40 +368,53 @@ async def generate_message(agent: Dict, data: Dict[str, List[str]], history: Lis
     target     = random.choice(others)
 
     prompt = (
-        f"당신은 반도체·주식 채팅방 참여자 '{agent['name']}'입니다.\n"
-        f"말투·성격: {agent['voice']}\n\n"
-        f"[참고 데이터]\n{data_snippet}\n\n"
-        f"[최근 대화]\n{history_text}\n\n"
-        f"[지금 할 일] {instruction}\n\n"
-        f"주의:\n"
-        f"- 반드시 1~2문장, 구어체 채팅 말투\n"
-        f"- 가끔 '{target}'을 직접 부르며 말해도 됨\n"
-        f"- 본문만 출력 (이름·역할 설명 금지)\n"
-        f"- 데이터에서 구체적 수치나 회사명 인용 가능\n"
+        f"너는 한국 반도체·주식 채팅방의 '{agent['name']}'야.\n"
+        f"성격: {agent['voice']}\n\n"
+        f"시장 데이터:\n{data_snippet}\n\n"
+        f"최근 대화:\n{history_text}\n\n"
+        f"지시: {instruction}\n\n"
+        f"규칙 (반드시 지킬 것):\n"
+        f"1. 한국어로만 답변 (중국어·영어 절대 금지)\n"
+        f"2. 1~2문장, 반말 채팅체\n"
+        f"3. '{agent['name']}:' 같은 자기 이름 출력 금지\n"
+        f"4. 가끔 '{target}'를 이름으로 부를 것\n"
+        f"답변:"
     )
 
-    try:
-        async with httpx.AsyncClient(timeout=45) as client:
-            r = await client.post(
-                f"{OLLAMA_URL}/api/generate",
-                json={
-                    "model": OLLAMA_MODEL,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.9,
-                        "top_p": 0.92,
-                        "num_predict": 150,
-                        "stop": ["\n\n", "---", "===", "규칙"],
+    def has_cjk(text: str) -> bool:
+        """중국어/일본어 한자 포함 여부 (한국 한자 제외)"""
+        return bool(re.search(r"[一-鿿぀-ヿ]", text))
+
+    for attempt in range(2):  # 중국어 섞이면 1회 재시도
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                r = await client.post(
+                    f"{OLLAMA_URL}/api/generate",
+                    json={
+                        "model": OLLAMA_MODEL,
+                        "prompt": prompt,
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.85 + attempt * 0.05,
+                            "top_p": 0.9,
+                            "num_predict": 120,
+                            "stop": ["\n\n", "규칙:", "시장 데이터:", "최근 대화:"],
+                        },
                     },
-                },
-            )
-            if r.status_code == 200:
-                text = r.json().get("response", "").strip()
-                lines = [l.strip() for l in text.split("\n") if l.strip()]
-                return " ".join(lines[:2])
-    except Exception as e:
-        print(f"[Ollama 오류] {e}")
+                )
+                if r.status_code == 200:
+                    text = r.json().get("response", "").strip()
+                    # "답변:" 접두어 제거
+                    text = re.sub(r"^답변[:：]?\s*", "", text).strip()
+                    # 자기 이름 접두어 제거 (예: "황소: ...")
+                    text = re.sub(rf"^{re.escape(agent['name'])}[:：]\s*", "", text).strip()
+                    lines = [l.strip() for l in text.split("\n") if l.strip()]
+                    result = " ".join(lines[:2])
+                    if result and not has_cjk(result):
+                        return result
+                    print(f"  [재시도] 한자 감지: {result[:30]}")
+        except Exception as e:
+            print(f"[Ollama 오류] {e}")
     return ""
 
 
