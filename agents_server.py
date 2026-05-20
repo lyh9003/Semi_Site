@@ -387,7 +387,7 @@ async def generate_message(agent: Dict, data: Dict[str, List[str]], history: Lis
 
     for attempt in range(2):  # 중국어 섞이면 1회 재시도
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with httpx.AsyncClient(timeout=120) as client:
                 r = await client.post(
                     f"{OLLAMA_URL}/api/generate",
                     json={
@@ -531,31 +531,29 @@ async def agent_loop():
             await manager.broadcast(msg)
             print(f"  → {text[:60]}...")
 
-            # 버스트 모드: 논쟁적 발언이면 2명이 빠르게 연속 반응
+            # 버스트 모드: 논쟁적 발언이면 1명이 빠르게 반응 (7B 속도 고려해 1회만)
             if is_hot_message(text):
-                print("[버스트] 논쟁 감지 → 연속 반응")
-                for _ in range(2):
-                    await asyncio.sleep(random.uniform(4, 9))
-                    burst_ids = {m["id"] for m in chat_history[-3:] if m.get("id") != "system"}
-                    burst_pool = [a for a in AGENTS if a["id"] not in burst_ids]
-                    burst_agent = random.choice(burst_pool if burst_pool else AGENTS)
-                    burst_hist = [m for m in chat_history if m.get("id") != "system"]
-                    burst_text = await generate_message(burst_agent, market_data, burst_hist)
-                    if burst_text:
-                        burst_msg = {
-                            "type": "message",
-                            "id": burst_agent["id"],
-                            "name": burst_agent["name"],
-                            "emoji": burst_agent["emoji"],
-                            "color": burst_agent["color"],
-                            "message": burst_text,
-                            "timestamp": datetime.now().strftime("%H:%M:%S"),
-                        }
-                        chat_history.append(burst_msg)
-                        await manager.broadcast(burst_msg)
-                        print(f"  [버스트] {burst_agent['name']}: {burst_text[:50]}...")
-                        if is_hot_message(burst_text):
-                            break
+                print("[버스트] 논쟁 감지 → 1명 추가 반응")
+                await asyncio.sleep(random.uniform(3, 6))
+                burst_ids = {m["id"] for m in chat_history[-3:] if m.get("id") != "system"}
+                burst_pool = [a for a in AGENTS if a["id"] not in burst_ids]
+                burst_agent = random.choice(burst_pool if burst_pool else AGENTS)
+                burst_hist = [m for m in chat_history if m.get("id") != "system"]
+                print(f"  [버스트] {burst_agent['name']} 생성 중...")
+                burst_text = await generate_message(burst_agent, market_data, burst_hist)
+                if burst_text:
+                    burst_msg = {
+                        "type": "message",
+                        "id": burst_agent["id"],
+                        "name": burst_agent["name"],
+                        "emoji": burst_agent["emoji"],
+                        "color": burst_agent["color"],
+                        "message": burst_text,
+                        "timestamp": datetime.now().strftime("%H:%M:%S"),
+                    }
+                    chat_history.append(burst_msg)
+                    await manager.broadcast(burst_msg)
+                    print(f"  [버스트] {burst_agent['name']}: {burst_text[:50]}...")
 
         # 기본 대기: 8~18초 (빠른 대화 속도)
         delay = random.uniform(8, 18)
