@@ -212,24 +212,57 @@ async def fetch_market_data() -> str:
     return "\n\n".join(parts) if parts else "시장 데이터 없음"
 
 
+# ── 논쟁 유발 키워드 (버스트 모드 트리거) ──────────────────────────────────
+HOT_KEYWORDS = [
+    "틀렸", "아니야", "반대야", "위험해", "버블", "폭락", "급등", "확실해",
+    "무조건", "말이 안", "과장", "틀림없", "절대", "이상하다", "의심",
+]
+
+def is_hot_message(text: str) -> bool:
+    return any(kw in text for kw in HOT_KEYWORDS)
+
+
 # ── Ollama 메시지 생성 ───────────────────────────────────────────────────────
 async def generate_message(agent: Dict, context: str, history: List[Dict]) -> str:
-    recent = history[-6:] if len(history) >= 6 else history
+    recent = history[-8:] if len(history) >= 8 else history
+
+    # 마지막 발언 파악
+    last_msg = recent[-1] if recent else None
+    last_speaker = f"{last_msg['emoji']}{last_msg['name']}" if last_msg else "아무도"
+    last_text = last_msg["message"] if last_msg else ""
+
     history_text = "\n".join(
         f"{m['emoji']}{m['name']}: {m['message']}" for m in recent
     ) if recent else "(대화 시작)"
 
+    # 시장 데이터는 짧게 요약해서 배경 참고용으로만
+    context_short = context[:600] if context else "시장 데이터 없음"
+
+    # 논쟁적 발언이면 더 강하게 반응하도록
+    hot = is_hot_message(last_text)
+    reaction_style = (
+        "강하게 찬성하거나 반박하며 논쟁을 이어가세요."
+        if hot else
+        "자연스럽게 반응하거나 새로운 관점을 던지세요."
+    )
+
+    # 에이전트 이름 목록 (본인 제외) - 직접 언급 유도
+    others = [a["name"] for a in AGENTS if a["id"] != agent["id"]]
+    others_str = "·".join(others[:4])  # 일부만 힌트로
+
     prompt = (
-        f"당신은 반도체·주식 시황 채팅방 참여자 '{agent['name']}'입니다.\n"
-        f"성격·역할: {agent['role']}\n\n"
-        f"=== 현재 시장 데이터 ===\n{context}\n\n"
-        f"=== 최근 대화 ===\n{history_text}\n\n"
-        "위 정보를 바탕으로, 당신의 역할과 성격에 맞게 시황 코멘트를 한국어로 작성하세요.\n"
-        "규칙:\n"
-        "- 반드시 2~3문장 이내\n"
-        "- 다른 참여자의 말에 동의·반박·질문하거나 새로운 관점 제시\n"
-        "- 자연스러운 구어체 (채팅 말투)\n"
-        "- 이름이나 역할 설명 없이 본문만 출력\n"
+        f"당신은 반도체·주식 채팅방의 '{agent['name']}'입니다.\n"
+        f"성격: {agent['role']}\n\n"
+        f"--- 최근 대화 ---\n{history_text}\n\n"
+        f"--- 시장 배경 데이터 (필요시만 참고) ---\n{context_short}\n\n"
+        f"지금 {last_speaker}가 방금 말했습니다: \"{last_text}\"\n\n"
+        f"'{agent['name']}'으로서 위 발언에 반응하세요. {reaction_style}\n"
+        f"규칙:\n"
+        f"1. 방금 한 말에 직접 반응이 최우선 (동의·반박·질문·비틀기)\n"
+        f"2. 1~2문장, 진짜 채팅 말투 (구어체)\n"
+        f"3. 가끔 다른 참여자 이름({others_str} 등)을 직접 부르며 말해도 됨\n"
+        f"4. 본문만 출력 (자기 이름·역할 설명 절대 금지)\n"
+        f"5. 시장 데이터를 억지로 넣지 말고, 대화 흐름을 따라갈 것\n"
     )
 
     try:
@@ -241,18 +274,17 @@ async def generate_message(agent: Dict, context: str, history: List[Dict]) -> st
                     "prompt": prompt,
                     "stream": False,
                     "options": {
-                        "temperature": 0.85,
-                        "top_p": 0.9,
-                        "num_predict": 180,
-                        "stop": ["\n\n", "==="],
+                        "temperature": 0.9,
+                        "top_p": 0.92,
+                        "num_predict": 150,
+                        "stop": ["\n\n", "---", "===", "규칙"],
                     },
                 },
             )
             if r.status_code == 200:
                 text = r.json().get("response", "").strip()
-                # 첫 줄만 사용 (프롬프트가 누출될 경우 방어)
                 lines = [l.strip() for l in text.split("\n") if l.strip()]
-                return " ".join(lines[:3])
+                return " ".join(lines[:2])
     except Exception as e:
         print(f"[Ollama 오류] {e}")
     return ""
@@ -324,32 +356,20 @@ async def agent_loop():
     while True:
         tick += 1
 
-        # 5분(20틱 × 15초)마다 데이터 갱신
-        if tick % 20 == 0:
+        # 30틱(약 5분)마다 시장 데이터 갱신
+        if tick % 30 == 0:
             market_context = await fetch_market_data()
             print(f"[데이터 갱신] tick={tick} | {len(market_context)}자")
 
-            refresh_msg = {
-                "type": "message",
-                "id": "system",
-                "name": "시스템",
-                "emoji": "🔄",
-                "color": "#64748b",
-                "message": f"시장 데이터가 갱신되었습니다. (뉴스·텔레그램·리포트 최신화)",
-                "timestamp": datetime.now().strftime("%H:%M:%S"),
-            }
-            chat_history.append(refresh_msg)
-            await manager.broadcast(refresh_msg)
-
-        # 최근 2명 제외하고 랜덤 선택
-        recent_ids = {m["id"] for m in chat_history[-2:] if m.get("id") != "system"}
+        # 최근 3명 제외하고 랜덤 선택 (더 다양하게)
+        recent_ids = {m["id"] for m in chat_history[-3:] if m.get("id") != "system"}
         candidates = [a for a in AGENTS if a["id"] not in recent_ids]
         agent = random.choice(candidates if candidates else AGENTS)
 
+        real_history = [m for m in chat_history if m.get("id") != "system"]
+
         print(f"[{agent['emoji']}{agent['name']}] 생성 중...")
-        text = await generate_message(agent, market_context, [
-            m for m in chat_history if m.get("id") != "system"
-        ])
+        text = await generate_message(agent, market_context, real_history)
 
         if text:
             msg = {
@@ -367,8 +387,34 @@ async def agent_loop():
             await manager.broadcast(msg)
             print(f"  → {text[:60]}...")
 
-        # 18~40초 랜덤 대기 (Qwen2.5 3B 속도 고려)
-        delay = random.randint(18, 40)
+            # 버스트 모드: 논쟁적 발언이면 2명이 빠르게 연속 반응
+            if is_hot_message(text):
+                print("[버스트] 논쟁 감지 → 연속 반응")
+                for _ in range(2):
+                    await asyncio.sleep(random.uniform(4, 9))
+                    burst_ids = {m["id"] for m in chat_history[-3:] if m.get("id") != "system"}
+                    burst_pool = [a for a in AGENTS if a["id"] not in burst_ids]
+                    burst_agent = random.choice(burst_pool if burst_pool else AGENTS)
+                    burst_hist = [m for m in chat_history if m.get("id") != "system"]
+                    burst_text = await generate_message(burst_agent, market_context, burst_hist)
+                    if burst_text:
+                        burst_msg = {
+                            "type": "message",
+                            "id": burst_agent["id"],
+                            "name": burst_agent["name"],
+                            "emoji": burst_agent["emoji"],
+                            "color": burst_agent["color"],
+                            "message": burst_text,
+                            "timestamp": datetime.now().strftime("%H:%M:%S"),
+                        }
+                        chat_history.append(burst_msg)
+                        await manager.broadcast(burst_msg)
+                        print(f"  [버스트] {burst_agent['name']}: {burst_text[:50]}...")
+                        if is_hot_message(burst_text):
+                            break  # 연쇄 폭발 방지
+
+        # 기본 대기: 8~18초 (빠른 대화 속도)
+        delay = random.uniform(8, 18)
         await asyncio.sleep(delay)
 
 
