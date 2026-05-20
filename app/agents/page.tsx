@@ -15,14 +15,9 @@ interface AgentMsg {
 const AGENT_INFO: Record<string, { desc: string }> = {
   bull:     { desc: "강세론자" },
   bear:     { desc: "약세론자" },
-  chart:    { desc: "기술적 분석" },
-  funda:    { desc: "펀더멘털" },
-  macro:    { desc: "거시경제" },
-  reporter: { desc: "뉴스 해설" },
-  analyst:  { desc: "리포트 분석" },
-  quant:    { desc: "퀀트" },
   risk:     { desc: "리스크 관리" },
-  retail:   { desc: "개인투자자" },
+  analyst:  { desc: "리포트 분석" },
+  macro:    { desc: "거시경제" },
   system:   { desc: "시스템" },
 };
 
@@ -177,7 +172,7 @@ export default function AgentsPage() {
             <div className="min-w-0">
               <h1 className="text-sm font-bold text-white truncate">AI 에이전트 시황 채팅</h1>
               <p className="text-xs text-gray-500 truncate">
-                뉴스·텔레그램·리포트 기반 · 10개 에이전트 실시간 토론
+                뉴스·텔레그램·리포트 기반 · 5개 에이전트 실시간 토론
               </p>
             </div>
           </div>
