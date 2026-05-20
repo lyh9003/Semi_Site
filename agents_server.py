@@ -273,22 +273,6 @@ async def fetch_market_data() -> Dict[str, List[str]]:
     return result
 
 
-# ── 랜덤 토픽 주입 (대화 다양성) ────────────────────────────────────────────
-TOPIC_STARTERS = [
-    "지금 HBM 시장에서 SK하이닉스와 삼성전자 격차 어떻게 보세요?",
-    "AI 버블이라는 말이 많은데 진짜 버블인가요 아닌가요?",
-    "중국 CXMT가 범용 DRAM 시장 위협하는 거 어느 정도로 심각하게 봐야 할까요?",
-    "지금 반도체 사이클 고점인가요 아직 더 올라갈까요?",
-    "엔비디아 단일 고객 의존 리스크 어떻게 생각하세요?",
-    "DDR5 전환 속도가 예상보다 빠른데 이게 DRAM 수요에 어떤 영향을 줄까요?",
-    "요즘 텔레그램에서 핫한 종목이 뭔가요?",
-    "최근 증권사 리포트 중에 제일 눈에 띄는 게 뭔가요?",
-    "NAND Flash 시장은 언제쯤 회복될까요?",
-    "삼성전자 지금 매수 타이밍인가요 아닌가요?",
-    "연준 금리 인하 속도가 반도체 수요에 미치는 영향은 어떻게 보세요?",
-    "메모리 Burn Margin 지금 어느 구간에 있다고 보세요?",
-]
-
 
 # ── 논쟁 유발 키워드 (버스트 모드 트리거) ──────────────────────────────────
 HOT_KEYWORDS = [
@@ -501,24 +485,6 @@ async def agent_loop():
         # 30틱(약 5분)마다 시장 데이터 갱신
         if tick % 30 == 0:
             market_data = await fetch_market_data()
-
-        # 8~12틱(약 90초)마다 랜덤 토픽 주입 — 대화 주제 환기
-        if tick % random.randint(8, 12) == 0:
-            topic = random.choice(TOPIC_STARTERS)
-            injector = random.choice([a for a in AGENTS if a["id"] != "system"])
-            topic_msg = {
-                "type": "message",
-                "id": injector["id"],
-                "name": injector["name"],
-                "emoji": injector["emoji"],
-                "color": injector["color"],
-                "message": topic,
-                "timestamp": datetime.now().strftime("%H:%M:%S"),
-            }
-            chat_history.append(topic_msg)
-            await manager.broadcast(topic_msg)
-            print(f"[토픽주입] {injector['name']}: {topic[:50]}")
-            await asyncio.sleep(random.uniform(4, 8))
 
         recent_ids = {m["id"] for m in chat_history[-3:] if m.get("id") != "system"}
 
