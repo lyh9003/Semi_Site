@@ -47,7 +47,7 @@ Phase 4  그래프 시각화 + 자연어 질의
 
 **목표**: 키워드 불일치 상황에서도 의미적으로 유사한 항목 연결
 
-**상태**: ✅ 완료 (임베딩 생성 후 동작)
+**상태**: 🔄 임베딩 생성 대기 중 (SQL 완료, 스크립트 실행 필요)
 
 **구현 내용**:
 - SQL: `supabase/migrations/003_add_embeddings.sql` — pgvector 확장, 벡터 컬럼, HNSW 인덱스, RPC 3개
@@ -55,18 +55,17 @@ Phase 4  그래프 시각화 + 자연어 질의
 - API 라우트: `app/api/insight/similar/route.ts` — 저장된 임베딩으로 RPC 호출 (Vercel 동작)
 - UI: insight 페이지에 "키워드 매칭 / 의미 유사도" 모드 전환 버튼 추가
 
-**사용 방법 (최초 1회)**:
-```
-# 1. Supabase SQL Editor에서 실행
-supabase/migrations/003_add_embeddings.sql
+**완료된 작업**:
+- ✅ Supabase pgvector 확장 + vector(1536) 컬럼 추가 (news, stock_reports, telegram_messages)
+- ✅ HNSW 인덱스 생성
+- ✅ match_news / match_reports / match_telegrams RPC 함수 생성
+- ✅ OpenAI text-embedding-3-small 기반 generate_embeddings.py 작성
+- ✅ .env.local에 OPENAI_API_KEY 저장
+- ✅ app/api/insight/similar/route.ts 작성 (Vercel 호환)
 
-# 2. .env.local에 추가
-SUPABASE_SERVICE_ROLE_KEY=<대시보드 Settings > API에서 확인>
-
-# 3. nomic-embed-text 설치
-ollama pull nomic-embed-text
-
-# 4. 임베딩 생성 (뉴스+리포트+텔레그램 전체)
+**다음 실행 필요**:
+```powershell
+# 임베딩 생성 (뉴스 2000 + 리포트 584 + 텔레그램 2000건, 약 5~10분)
 python generate_embeddings.py
 ```
 
