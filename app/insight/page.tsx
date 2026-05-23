@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -35,6 +35,14 @@ interface ScoredItem extends UnifiedItem {
   score: number;
 }
 
+type SearchMode = "keyword" | "semantic";
+
+interface SemanticResult {
+  news: UnifiedItem[];
+  reports: UnifiedItem[];
+  telegrams: UnifiedItem[];
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function parseKeywords(kw: string): string[] {
   if (!kw) return [];
@@ -67,6 +75,140 @@ const SOURCE_HEADER: Record<SourceType, string> = {
   telegram: "bg-teal-50",
 };
 
+// ─── 공통 카드 렌더러 ──────────────────────────────────────────────────────────
+function ItemCard({
+  item,
+  onSelect,
+  badge,
+}: {
+  item: UnifiedItem & { score?: number; similarity?: number };
+  onSelect: (i: UnifiedItem) => void;
+  badge?: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={() => onSelect(item)}
+      className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors"
+    >
+      <p className="text-xs font-medium text-slate-700 line-clamp-2 mb-1.5 leading-relaxed">
+        {item.title}
+      </p>
+      <div className="flex flex-wrap items-center gap-1">
+        {badge}
+        <span className="text-[10px] text-slate-300 ml-auto">{item.date}</span>
+      </div>
+    </button>
+  );
+}
+
+function RelatedGrid({
+  related,
+  selected,
+  onSelect,
+  showScore,
+}: {
+  related: Record<SourceType, ScoredItem[]>;
+  selected: UnifiedItem;
+  onSelect: (i: UnifiedItem) => void;
+  showScore?: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      {(["news", "report", "telegram"] as SourceType[]).map(src => {
+        const items = related[src];
+        if (items.length === 0) return null;
+        return (
+          <div key={src} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className={`px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 ${SOURCE_HEADER[src]}`}>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${SOURCE_BADGE[src]}`}>
+                {SOURCE_LABEL[src]}
+              </span>
+              <span className="text-xs text-slate-400">{items.length}건</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {items.map(item => {
+                const commonKws = item.keywords.filter(k => selected.keywords.includes(k));
+                return (
+                  <ItemCard key={`${item.source}-${item.id}`} item={item} onSelect={onSelect}
+                    badge={
+                      <>
+                        {commonKws.slice(0, 2).map(k => (
+                          <span key={k} className="text-[10px] bg-yellow-50 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded">
+                            {k}
+                          </span>
+                        ))}
+                        {showScore && (
+                          <span className="text-[10px] text-slate-400">공통 {item.score}개</span>
+                        )}
+                      </>
+                    }
+                  />
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SemanticGrid({
+  semantic,
+  onSelect,
+}: {
+  semantic: SemanticResult;
+  onSelect: (i: UnifiedItem) => void;
+}) {
+  const totalSemantic =
+    semantic.news.length + semantic.reports.length + semantic.telegrams.length;
+
+  if (totalSemantic === 0) {
+    return (
+      <div className="bg-slate-50 rounded-xl border border-slate-200 border-dashed p-6 text-center text-slate-400 text-sm">
+        <p className="text-2xl mb-2">🧠</p>
+        의미적으로 유사한 항목이 없습니다
+        <p className="text-xs mt-1 text-slate-300">임베딩 임계값: 0.4 이상</p>
+      </div>
+    );
+  }
+
+  const groups: [SourceType, UnifiedItem[]][] = [
+    ["news", semantic.news],
+    ["report", semantic.reports],
+    ["telegram", semantic.telegrams],
+  ];
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      {groups.map(([src, items]) => {
+        if (items.length === 0) return null;
+        return (
+          <div key={src} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className={`px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 ${SOURCE_HEADER[src]}`}>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${SOURCE_BADGE[src]}`}>
+                {SOURCE_LABEL[src]}
+              </span>
+              <span className="text-xs text-slate-400">{items.length}건</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {items.map(item => (
+                <ItemCard key={`${item.source}-${item.id}`} item={item} onSelect={onSelect}
+                  badge={
+                    <span className="text-[10px] bg-indigo-50 text-indigo-600 border border-indigo-200 px-1.5 py-0.5 rounded">
+                      의미 유사
+                    </span>
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function InsightPage() {
   const supabase = createClient();
@@ -77,6 +219,10 @@ export default function InsightPage() {
   const [tab, setTab] = useState<SourceType>("news");
   const [selected, setSelected] = useState<UnifiedItem | null>(null);
   const [search, setSearch] = useState("");
+  const [mode, setMode] = useState<SearchMode>("keyword");
+  const [semantic, setSemantic] = useState<SemanticResult | null>(null);
+  const [semanticLoading, setSemanticLoading] = useState(false);
+  const [semanticError, setSemanticError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -129,6 +275,51 @@ export default function InsightPage() {
     () => [...allNews, ...allReports, ...allTelegrams],
     [allNews, allReports, allTelegrams]
   );
+
+  const fetchSemantic = useCallback(async (item: UnifiedItem) => {
+    setSemanticLoading(true);
+    setSemanticError(null);
+    setSemantic(null);
+    try {
+      const res = await fetch("/api/insight/similar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: item.source, id: item.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSemanticError(data.error ?? "오류가 발생했습니다");
+        return;
+      }
+      // API 결과를 UnifiedItem으로 변환
+      const toItem = (src: SourceType) => (r: Record<string, unknown>): UnifiedItem => ({
+        id: r.id as number,
+        source: src,
+        title: (r.title ?? r.summary ?? "(제목 없음)") as string,
+        body: (r.summary ?? r.one_line_summary ?? "") as string,
+        keywords: parseKeywords((r.keyword ?? r.keywords ?? "") as string),
+        date: ((r.date ?? r.date_utc ?? "") as string).slice(0, 10),
+        link: r.link as string | undefined,
+        badge: (r.company ?? r.securities_firm ?? r.channel ?? "") as string,
+      });
+      setSemantic({
+        news: (data.news ?? []).map(toItem("news")),
+        reports: (data.reports ?? []).map(toItem("report")),
+        telegrams: (data.telegrams ?? []).map(toItem("telegram")),
+      });
+    } catch {
+      setSemanticError("네트워크 오류가 발생했습니다");
+    } finally {
+      setSemanticLoading(false);
+    }
+  }, []);
+
+  const handleSelect = (item: UnifiedItem) => {
+    setSelected(item);
+    setSemantic(null);
+    setSemanticError(null);
+    setMode("keyword");
+  };
 
   const tabItems = useMemo(() => {
     const items = tab === "news" ? allNews : tab === "report" ? allReports : allTelegrams;
@@ -223,7 +414,7 @@ export default function InsightPage() {
             ) : tabItems.map(item => {
               const isSelected = selected?.id === item.id && selected?.source === item.source;
               return (
-                <button key={`${item.source}-${item.id}`} onClick={() => setSelected(item)}
+                <button key={`${item.source}-${item.id}`} onClick={() => handleSelect(item)}
                   className={`w-full text-left px-3 py-3 hover:bg-slate-50 transition-colors ${
                     isSelected ? `bg-blue-50 border-l-2 ${SOURCE_BORDER[item.source]}` : ""
                   }`}>
@@ -302,64 +493,83 @@ export default function InsightPage() {
                 )}
               </div>
 
+              {/* 모드 전환 탭 */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex bg-slate-100 rounded-lg p-0.5 gap-0.5">
+                  <button
+                    onClick={() => setMode("keyword")}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                      mode === "keyword" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    🏷️ 키워드 매칭
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMode("semantic");
+                      if (!semantic && !semanticLoading) fetchSemantic(selected);
+                    }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                      mode === "semantic" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    🧠 의미 유사도
+                  </button>
+                </div>
+                {mode === "semantic" && (
+                  <span className="text-[10px] text-slate-400">pgvector · Phase 2</span>
+                )}
+              </div>
+
               {/* 연관 정보 */}
               <div className="flex-shrink-0">
-                <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">
-                  연관 정보 {totalRelated > 0 ? `(${totalRelated}건)` : ""}
-                </p>
-
-                {totalRelated === 0 ? (
-                  <div className="bg-slate-50 rounded-xl border border-slate-200 border-dashed p-6 text-center text-slate-400 text-sm">
-                    <p className="text-2xl mb-2">🔗</p>
-                    키워드가 겹치는 연관 정보가 없습니다
-                    {selected.keywords.length === 0 && (
-                      <p className="text-xs mt-1">이 항목에 키워드가 등록되어 있지 않습니다</p>
+                {mode === "keyword" ? (
+                  <>
+                    <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">
+                      키워드 연관 정보 {totalRelated > 0 ? `(${totalRelated}건)` : ""}
+                    </p>
+                    {totalRelated === 0 ? (
+                      <div className="bg-slate-50 rounded-xl border border-slate-200 border-dashed p-6 text-center text-slate-400 text-sm">
+                        <p className="text-2xl mb-2">🔗</p>
+                        키워드가 겹치는 연관 정보가 없습니다
+                        {selected.keywords.length === 0 && (
+                          <p className="text-xs mt-1">이 항목에 키워드가 등록되어 있지 않습니다</p>
+                        )}
+                      </div>
+                    ) : (
+                      <RelatedGrid
+                        related={related}
+                        selected={selected}
+                        onSelect={handleSelect}
+                        showScore
+                      />
                     )}
-                  </div>
+                  </>
                 ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                    {(["news", "report", "telegram"] as SourceType[]).map(src => {
-                      const items = related[src];
-                      if (items.length === 0) return null;
-                      return (
-                        <div key={src} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                          <div className={`px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 ${SOURCE_HEADER[src]}`}>
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${SOURCE_BADGE[src]}`}>
-                              {SOURCE_LABEL[src]}
-                            </span>
-                            <span className="text-xs text-slate-400">{items.length}건</span>
-                          </div>
-                          <div className="divide-y divide-slate-100">
-                            {items.map(item => {
-                              const commonKws = item.keywords.filter(k => selected.keywords.includes(k));
-                              return (
-                                <button key={`${item.source}-${item.id}`}
-                                  onClick={() => setSelected(item)}
-                                  className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors">
-                                  <p className="text-xs font-medium text-slate-700 line-clamp-2 mb-1.5 leading-relaxed">
-                                    {item.title}
-                                  </p>
-                                  <div className="flex flex-wrap items-center gap-1">
-                                    {commonKws.slice(0, 3).map(k => (
-                                      <span key={k} className="text-[10px] bg-yellow-50 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded">
-                                        {k}
-                                      </span>
-                                    ))}
-                                    <span className="text-[10px] text-slate-400 ml-auto">
-                                      공통 {item.score}개
-                                    </span>
-                                  </div>
-                                  {item.date && (
-                                    <p className="text-[10px] text-slate-300 mt-1">{item.date}</p>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <>
+                    <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">
+                      의미 유사 정보
+                    </p>
+                    {semanticLoading && (
+                      <div className="bg-slate-50 rounded-xl border border-slate-200 p-8 text-center text-slate-400">
+                        <div className="text-2xl mb-2 animate-spin inline-block">⚙️</div>
+                        <p className="text-sm">임베딩 기반 검색 중...</p>
+                      </div>
+                    )}
+                    {semanticError && (
+                      <div className="bg-red-50 rounded-xl border border-red-200 p-5 text-center">
+                        <p className="text-sm text-red-600 font-medium mb-1">⚠️ {semanticError}</p>
+                        {semanticError.includes("generate_embeddings") && (
+                          <code className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded block mt-2">
+                            python generate_embeddings.py
+                          </code>
+                        )}
+                      </div>
+                    )}
+                    {semantic && !semanticLoading && (
+                      <SemanticGrid semantic={semantic} onSelect={handleSelect} />
+                    )}
+                  </>
                 )}
               </div>
             </>

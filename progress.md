@@ -43,16 +43,38 @@ Phase 4  그래프 시각화 + 자연어 질의
 
 ---
 
-## Phase 2 — pgvector 의미 유사도 (예정)
+## Phase 2 — pgvector 의미 유사도
 
 **목표**: 키워드 불일치 상황에서도 의미적으로 유사한 항목 연결
 
-**할 일**:
-- [ ] Supabase에서 pgvector 익스텐션 활성화
-- [ ] `news`, `stock_reports`, `telegram_messages` 테이블에 `embedding vector(768)` 컬럼 추가
-- [ ] 임베딩 생성 스크립트 작성 (Ollama `nomic-embed-text` 또는 `mxbai-embed-large`)
-- [ ] Supabase RPC 함수 `match_similar(embedding, threshold, limit)` 작성
-- [ ] `/insight` 페이지에 "의미 유사 항목" 탭 추가
+**상태**: ✅ 완료 (임베딩 생성 후 동작)
+
+**구현 내용**:
+- SQL: `supabase/migrations/003_add_embeddings.sql` — pgvector 확장, 벡터 컬럼, HNSW 인덱스, RPC 3개
+- 임베딩 생성: `generate_embeddings.py` — Ollama `nomic-embed-text` 모델, 증분 처리
+- API 라우트: `app/api/insight/similar/route.ts` — 저장된 임베딩으로 RPC 호출 (Vercel 동작)
+- UI: insight 페이지에 "키워드 매칭 / 의미 유사도" 모드 전환 버튼 추가
+
+**사용 방법 (최초 1회)**:
+```
+# 1. Supabase SQL Editor에서 실행
+supabase/migrations/003_add_embeddings.sql
+
+# 2. .env.local에 추가
+SUPABASE_SERVICE_ROLE_KEY=<대시보드 Settings > API에서 확인>
+
+# 3. nomic-embed-text 설치
+ollama pull nomic-embed-text
+
+# 4. 임베딩 생성 (뉴스+리포트+텔레그램 전체)
+python generate_embeddings.py
+```
+
+**파일**:
+- `supabase/migrations/003_add_embeddings.sql`
+- `generate_embeddings.py`
+- `app/api/insight/similar/route.ts`
+- `app/insight/page.tsx` (업데이트)
 
 **Supabase SQL 예시**:
 ```sql
