@@ -10,6 +10,7 @@ interface Sources {
   news: NewsDoc[];
   reports: ReportDoc[];
   telegrams: TeleDoc[];
+  isRecent?: boolean;
 }
 
 const EXAMPLES = [
@@ -60,7 +61,7 @@ export default function AskPage() {
           try {
             const obj = JSON.parse(line);
             if (obj.type === "sources") {
-              setSources({ news: obj.news, reports: obj.reports, telegrams: obj.telegrams });
+              setSources({ news: obj.news, reports: obj.reports, telegrams: obj.telegrams, isRecent: obj.isRecent });
             } else if (obj.type === "text") {
               setAnswer(prev => prev + obj.data);
             } else if (obj.type === "error") {
@@ -115,9 +116,16 @@ export default function AskPage() {
           {/* 참고 자료 */}
           {sources && totalSources > 0 && (
             <div className="border-t border-slate-100 px-5 py-4">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                참고 자료 {totalSources}건
-              </p>
+              <div className="flex items-center gap-2 mb-3">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  참고 자료 {totalSources}건
+                </p>
+                {sources.isRecent !== undefined && (
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${sources.isRecent ? "bg-orange-100 text-orange-600" : "bg-slate-100 text-slate-500"}`}>
+                    {sources.isRecent ? "📅 최근 14일" : "🔍 전체 시맨틱"}
+                  </span>
+                )}
+              </div>
               <div className="flex flex-col gap-2">
                 {sources.news.map(n => (
                   <a key={`n-${n.id}`} href={n.link} target="_blank" rel="noopener noreferrer"

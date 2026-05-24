@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
 
-export const maxDuration = 30; // Vercel 함수 타임아웃 30초
+export const maxDuration = 30;
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -17,14 +17,12 @@ const SYSTEM = `너는 한국 반도체·주식 시황 전문가 AI야.
 - 제공된 자료에 없는 내용은 추측하지 말고 솔직하게 말해
 - 4~6문장으로 간결하게 답변`;
 
-async function matchDocs(fn: string, embedding: number[]) {
+async function matchDocs(fn: string, embedding: number[], extra?: Record<string, unknown>) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
       method: "POST",
       headers: { ...HDR, "Content-Type": "application/json" },
-      // threshold=0: 짧은 질문 vs 긴 문서의 임베딩 비대칭 문제로 threshold 제거,
-      // HNSW 인덱스가 유사도 순 상위 5개를 반환
-      body: JSON.stringify({ query_embedding: embedding, match_threshold: 0, match_count: 5 }),
+      body: JSON.stringify({ query_embedding: embedding, match_count: 5, ...extra }),
       cache: "no-store",
     });
     if (!res.ok) return [];
@@ -34,25 +32,49 @@ async function matchDocs(fn: string, embedding: number[]) {
   }
 }
 
+// 질문이 최신 시황 관련인지 판단 (true = 최근 14일 검색, false = 전체 시맨틱 검색)
+async function isRecentQuery(openai: OpenAI, question: string): Promise<boolean> {
+  const res = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content: `질문이 최신 시황/동향/가격/실적 등 '지금 현재' 정보가 중요한 질문이면 "recent", 기술 설명·역사·개념 등 시간에 덜 민감한 질문이면 "general"로만 답해.`,
+      },
+      { role: "user", content: question },
+    ],
+    max_tokens: 5,
+    temperature: 0,
+  });
+  return res.choices[0].message.content?.trim().toLowerCase().startsWith("recent") ?? true;
+}
+
 export async function POST(req: NextRequest) {
   const { question } = await req.json() as { question: string };
   if (!question?.trim()) return new Response("question required", { status: 400 });
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  // 1. 질문 임베딩
-  const embRes = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: question,
-  });
+  // 1. 질문 분류 + 임베딩 병렬 실행
+  const [isRecent, embRes] = await Promise.all([
+    isRecentQuery(openai, question),
+    openai.embeddings.create({ model: "text-embedding-3-small", input: question }),
+  ]);
   const embedding = embRes.data[0].embedding;
 
-  // 2. 관련 문서 검색 (threshold=0: 상위 5개 항상 반환)
-  const [news, reports, telegrams] = await Promise.all([
-    matchDocs("match_news", embedding),
-    matchDocs("match_reports", embedding),
-    matchDocs("match_telegrams", embedding),
-  ]);
+  // 2. 검색 전략 분기
+  //    최신 질문 → 최근 14일 필터 함수 / 일반 질문 → 전체 시맨틱 검색
+  const [news, reports, telegrams] = isRecent
+    ? await Promise.all([
+        matchDocs("match_news_recent",     embedding, { since_days: 14 }),
+        matchDocs("match_reports_recent",  embedding, { since_days: 14 }),
+        matchDocs("match_telegrams_recent",embedding, { since_days: 14 }),
+      ])
+    : await Promise.all([
+        matchDocs("match_news",     embedding),
+        matchDocs("match_reports",  embedding),
+        matchDocs("match_telegrams",embedding),
+      ]);
 
   // 3. 컨텍스트 구성
   const ctx: string[] = [];
@@ -87,11 +109,9 @@ export async function POST(req: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // 소스 먼저 전송
         controller.enqueue(encoder.encode(
-          JSON.stringify({ type: "sources", news, reports, telegrams }) + "\n"
+          JSON.stringify({ type: "sources", news, reports, telegrams, isRecent }) + "\n"
         ));
-        // 텍스트 스트리밍
         for await (const chunk of completion) {
           const text = chunk.choices[0]?.delta?.content ?? "";
           if (text) {
