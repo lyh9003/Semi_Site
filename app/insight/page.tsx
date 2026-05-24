@@ -235,7 +235,7 @@ export default function InsightPage() {
           .order("date", { ascending: false }).limit(60),
         supabase.from("telegram_messages")
           .select("id,channel,message,summary,keywords,sentiment,forward_count,date_utc")
-          .order("forward_count", { ascending: false }).limit(60),
+          .order("date_utc", { ascending: false }).limit(60),
       ]);
 
       setAllNews((newsRes.data ?? []).map((n: NewsRow): UnifiedItem => ({
