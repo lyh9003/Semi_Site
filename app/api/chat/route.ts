@@ -17,29 +17,18 @@ const SYSTEM = `너는 한국 반도체·주식 시황 전문가 AI야.
 - 제공된 자료에 없는 내용은 추측하지 말고 솔직하게 말해
 - 4~6문장으로 간결하게 답변`;
 
-async function matchDocs(fn: string, embedding: number[], threshold: number) {
+async function matchDocs(fn: string, embedding: number[]) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
       method: "POST",
       headers: { ...HDR, "Content-Type": "application/json" },
-      body: JSON.stringify({ query_embedding: embedding, match_threshold: threshold, match_count: 5 }),
+      // threshold=0: 짧은 질문 vs 긴 문서의 임베딩 비대칭 문제로 threshold 제거,
+      // HNSW 인덱스가 유사도 순 상위 5개를 반환
+      body: JSON.stringify({ query_embedding: embedding, match_threshold: 0, match_count: 5 }),
       cache: "no-store",
     });
     if (!res.ok) return [];
     return res.json();
-  } catch {
-    return [];
-  }
-}
-
-// 임베딩 검색 결과가 비면 날짜순 최신 폴백
-async function fetchRecent(table: string, select: string, dateCol: string, limit: number) {
-  try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/${table}?select=${select}&order=${dateCol}.desc&limit=${limit}`,
-      { headers: HDR, cache: "no-store" }
-    );
-    return res.ok ? res.json() : [];
   } catch {
     return [];
   }
@@ -58,25 +47,12 @@ export async function POST(req: NextRequest) {
   });
   const embedding = embRes.data[0].embedding;
 
-  // 2. 관련 문서 검색 (뉴스·텔레그램은 낮은 threshold, 리포트는 정밀 매칭)
-  let [news, reports, telegrams] = await Promise.all([
-    matchDocs("match_news", embedding, 0.2),
-    matchDocs("match_reports", embedding, 0.3),
-    matchDocs("match_telegrams", embedding, 0.2),
+  // 2. 관련 문서 검색 (threshold=0: 상위 5개 항상 반환)
+  const [news, reports, telegrams] = await Promise.all([
+    matchDocs("match_news", embedding),
+    matchDocs("match_reports", embedding),
+    matchDocs("match_telegrams", embedding),
   ]);
-
-  // 결과 없으면 최신 날짜순 폴백
-  if ((news as unknown[]).length === 0) {
-    news = await fetchRecent("news", "id,title,company,date,summary,keyword,link", "date", 3);
-  }
-  if ((telegrams as unknown[]).length === 0) {
-    telegrams = await fetchRecent(
-      "telegram_messages",
-      "id,channel,summary,keywords,sentiment,forward_count,date_utc",
-      "date_utc",
-      3
-    );
-  }
 
   // 3. 컨텍스트 구성
   const ctx: string[] = [];
