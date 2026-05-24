@@ -81,8 +81,8 @@ export async function POST(req: NextRequest) {
   (news as {date:string;title:string;company:string;summary:string}[]).forEach((n, i) =>
     ctx.push(`[뉴스${i+1}] (${n.date}) ${n.title}${n.company ? ` — ${n.company}` : ""}\n${n.summary}`)
   );
-  (reports as {date:string;title:string;securities_firm:string;one_line_summary:string}[]).forEach((r, i) =>
-    ctx.push(`[리포트${i+1}] (${r.date}) ${r.title} — ${r.securities_firm}\n${r.one_line_summary}`)
+  (reports as {date:string;title:string;securities_firm:string;summary:string}[]).forEach((r, i) =>
+    ctx.push(`[리포트${i+1}] (${r.date}) ${r.title} — ${r.securities_firm}\n${r.summary}`)
   );
   (telegrams as {date_utc:string;channel:string;summary:string}[]).forEach((t, i) =>
     ctx.push(`[텔레그램${i+1}] (${t.date_utc?.slice(0,10)}) ${t.channel}\n${t.summary}`)
