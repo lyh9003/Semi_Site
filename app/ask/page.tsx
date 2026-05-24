@@ -63,12 +63,14 @@ export default function AskPage() {
               setSources({ news: obj.news, reports: obj.reports, telegrams: obj.telegrams });
             } else if (obj.type === "text") {
               setAnswer(prev => prev + obj.data);
+            } else if (obj.type === "error") {
+              setAnswer(`오류: ${obj.message}`);
             }
           } catch {}
         }
       }
     } catch (e) {
-      setAnswer("오류가 발생했습니다. 다시 시도해주세요.");
+      setAnswer(`오류: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setLoading(false);
     }

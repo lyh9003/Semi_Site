@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
 
+export const maxDuration = 30; // Vercel 함수 타임아웃 30초
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const HDR = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
@@ -16,19 +18,24 @@ const SYSTEM = `너는 한국 반도체·주식 시황 전문가 AI야.
 - 4~6문장으로 간결하게 답변`;
 
 async function matchDocs(fn: string, embedding: number[]) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
-    method: "POST",
-    headers: { ...HDR, "Content-Type": "application/json" },
-    body: JSON.stringify({ query_embedding: embedding, match_threshold: 0.3, match_count: 5 }),
-    cache: "no-store",
-  });
-  return res.ok ? res.json() : [];
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: { ...HDR, "Content-Type": "application/json" },
+      body: JSON.stringify({ query_embedding: embedding, match_threshold: 0.3, match_count: 5 }),
+      cache: "no-store",
+    });
+    return res.ok ? res.json() : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function POST(req: NextRequest) {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
   const { question } = await req.json() as { question: string };
   if (!question?.trim()) return new Response("question required", { status: 400 });
+
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   // 1. 질문 임베딩
   const embRes = await openai.embeddings.create({
@@ -56,42 +63,47 @@ export async function POST(req: NextRequest) {
     ctx.push(`[텔레그램${i+1}] (${t.date_utc?.slice(0,10)}) ${t.channel}\n${t.summary}`)
   );
 
-  const encoder = new TextEncoder();
+  // 4. gpt-4o-mini 스트리밍
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: SYSTEM },
+      {
+        role: "user",
+        content: ctx.length > 0
+          ? `참고 자료:\n${ctx.join("\n\n")}\n\n질문: ${question}`
+          : `질문: ${question}`,
+      },
+    ],
+    stream: true,
+    max_tokens: 600,
+    temperature: 0.3,
+  });
 
+  const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      // 소스 먼저 전송
-      controller.enqueue(encoder.encode(
-        JSON.stringify({ type: "sources", news, reports, telegrams }) + "\n"
-      ));
-
-      // gpt-4o-mini 스트리밍 답변
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: SYSTEM },
-          {
-            role: "user",
-            content: ctx.length > 0
-              ? `참고 자료:\n${ctx.join("\n\n")}\n\n질문: ${question}`
-              : `질문: ${question}`,
-          },
-        ],
-        stream: true,
-        max_tokens: 600,
-        temperature: 0.3,
-      });
-
-      for await (const chunk of completion) {
-        const text = chunk.choices[0]?.delta?.content ?? "";
-        if (text) {
-          controller.enqueue(encoder.encode(
-            JSON.stringify({ type: "text", data: text }) + "\n"
-          ));
+      try {
+        // 소스 먼저 전송
+        controller.enqueue(encoder.encode(
+          JSON.stringify({ type: "sources", news, reports, telegrams }) + "\n"
+        ));
+        // 텍스트 스트리밍
+        for await (const chunk of completion) {
+          const text = chunk.choices[0]?.delta?.content ?? "";
+          if (text) {
+            controller.enqueue(encoder.encode(
+              JSON.stringify({ type: "text", data: text }) + "\n"
+            ));
+          }
         }
+      } catch (e) {
+        controller.enqueue(encoder.encode(
+          JSON.stringify({ type: "error", message: String(e) }) + "\n"
+        ));
+      } finally {
+        controller.close();
       }
-
-      controller.close();
     },
   });
 
