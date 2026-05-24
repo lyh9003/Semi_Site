@@ -47,6 +47,7 @@ export default function Header() {
     { href: "/board", label: "아카이브" },
     { href: "/insight", label: "🔗 인사이트" },
     { href: "/graph", label: "🕸️ 그래프" },
+    { href: "/ask", label: "🤖 Q&A" },
     { href: "/agents", label: "🧠 에이전트" },
   ] as { href: string; label: string; external?: boolean }[];
 

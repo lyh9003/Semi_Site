@@ -52,6 +52,8 @@ export default function GraphPage() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [entityDocs, setEntityDocs] = useState<EntityDoc | null>(null);
   const [docsLoading, setDocsLoading] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [filterType, setFilterType] = useState("");
   const [minWeight, setMinWeight] = useState(3);
   const [search, setSearch] = useState("");
@@ -76,15 +78,39 @@ export default function GraphPage() {
 
   useEffect(() => { loadGraph(); }, [loadGraph]);
 
-  // 노드 클릭 → 문서 조회
+  // 노드 클릭 → 문서 조회 + AI 요약
   const handleNodeClick = useCallback(async (node: Node) => {
     setSelectedNode(node);
     setDocsLoading(true);
     setEntityDocs(null);
-    const res = await fetch(`/api/graph/entity?id=${node.id}`);
-    const data = await res.json();
+    setSummary("");
+    setSummaryLoading(true);
+
+    // 문서 + 요약 병렬 요청
+    const [docsRes, sumRes] = await Promise.all([
+      fetch(`/api/graph/entity?id=${node.id}`),
+      fetch("/api/graph/summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entityId: node.id, entityName: node.name, entityType: node.type }),
+      }),
+    ]);
+
+    const data = await docsRes.json();
     setEntityDocs(data);
     setDocsLoading(false);
+
+    // 요약 스트리밍 읽기
+    if (sumRes.ok && sumRes.body) {
+      const reader = sumRes.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setSummary(prev => prev + decoder.decode(value, { stream: true }));
+      }
+    }
+    setSummaryLoading(false);
   }, []);
 
   // D3 그래프 렌더링
@@ -308,6 +334,21 @@ export default function GraphPage() {
             <h2 className="text-base font-bold text-slate-800">{selectedNode.name}</h2>
             {entityDocs && (
               <p className="text-xs text-slate-400 mt-0.5">총 {entityDocs.total}건 문서에서 언급</p>
+            )}
+          </div>
+
+          {/* AI 요약 */}
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+            {summaryLoading && !summary && (
+              <p className="text-xs text-slate-400 flex items-center gap-1">
+                <span className="animate-spin inline-block">⚙️</span> AI 요약 생성 중...
+              </p>
+            )}
+            {(summary || summaryLoading) && (
+              <p className="text-xs text-slate-700 leading-relaxed">
+                {summary}
+                {summaryLoading && <span className="animate-pulse">▌</span>}
+              </p>
             )}
           </div>
 

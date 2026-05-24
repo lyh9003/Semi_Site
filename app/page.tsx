@@ -7,6 +7,7 @@ import RelativeChart from "@/components/RelativeChart";
 import TelegramCard from "@/components/TelegramCard";
 import MemoryPriceCard from "@/components/MemoryPriceCard";
 import ChartImageSection from "@/components/ChartImageSection";
+import DailyBriefing from "@/components/DailyBriefing";
 
 export const revalidate = 3600; // 1시간마다 재생성
 
@@ -53,6 +54,9 @@ export default async function HomePage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* 일일 시황 브리핑 */}
+      <DailyBriefing />
+
       {/* 히어로 섹션 */}
       <section className="text-center pt-6 pb-4 mb-6">
         <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 text-xs font-medium px-3 py-1.5 rounded-full mb-3 border border-blue-100">
