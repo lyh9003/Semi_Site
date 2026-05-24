@@ -137,7 +137,7 @@ export default function GraphPage() {
 
     // 노드 그리기
     const node = g.append("g")
-      .selectAll("g")
+      .selectAll<SVGGElement, Node>("g")
       .data(nodes)
       .join("g")
       .style("cursor", "pointer")
