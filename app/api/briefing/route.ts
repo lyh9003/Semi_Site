@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
-
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const HDR = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
@@ -16,6 +14,7 @@ async function fetchRecent(table: string, select: string, dateCol: string, limit
 }
 
 export async function GET() {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
   const [news, reports, telegrams] = await Promise.all([
     fetchRecent("news", "title,company,date,summary,keyword", "date", 10),
     fetchRecent("stock_reports", "title,securities_firm,date,one_line_summary,keyword", "date", 5),
