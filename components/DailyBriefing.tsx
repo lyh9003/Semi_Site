@@ -2,9 +2,21 @@
 
 import { useEffect, useState } from "react";
 
+interface Weather { emoji: string; label: string; reason: string }
+
+const WEATHER_STYLE: Record<string, string> = {
+  "맑음":      "bg-amber-400/20 text-amber-300 border-amber-400/30",
+  "구름 조금": "bg-sky-400/20 text-sky-300 border-sky-400/30",
+  "흐림":      "bg-slate-400/20 text-slate-300 border-slate-400/30",
+  "비":        "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  "폭풍":      "bg-red-500/20 text-red-300 border-red-500/30",
+  "안개":      "bg-purple-400/20 text-purple-300 border-purple-400/30",
+};
+
 export default function DailyBriefing() {
   const [briefing, setBriefing] = useState("");
   const [date, setDate] = useState("");
+  const [weather, setWeather] = useState<Weather | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
@@ -18,7 +30,7 @@ export default function DailyBriefing() {
 
   useEffect(() => {
     loadBriefing()
-      .then(data => { setBriefing(data.briefing); setDate(data.date); })
+      .then(data => { setBriefing(data.briefing); setDate(data.date); setWeather(data.weather ?? null); })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
@@ -29,6 +41,7 @@ export default function DailyBriefing() {
       const data = await loadBriefing(true);
       setBriefing(data.briefing);
       setDate(data.date);
+      setWeather(data.weather ?? null);
       setError(false);
     } catch {
       setError(true);
@@ -39,11 +52,23 @@ export default function DailyBriefing() {
 
   if (error && !briefing) return null;
 
+  const weatherStyle = weather ? (WEATHER_STYLE[weather.label] ?? WEATHER_STYLE["흐림"]) : "";
+
   return (
     <section className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white mb-8">
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         <span className="text-lg">📊</span>
         <h2 className="text-base font-bold">오늘의 반도체 시황 브리핑</h2>
+
+        {weather && !loading && (
+          <span
+            title={weather.reason}
+            className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${weatherStyle} cursor-default`}
+          >
+            {weather.emoji} {weather.label}
+          </span>
+        )}
+
         {date && (
           <span className="ml-auto text-xs text-slate-400">{date}</span>
         )}

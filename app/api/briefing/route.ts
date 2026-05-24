@@ -38,33 +38,55 @@ export async function GET() {
   });
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-4.1",
+    response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
         content: `너는 한국 반도체·주식 시황 브리핑 전문가야.
-오늘(${today}) 최신 뉴스·리포트·텔레그램을 분석해서 시황 브리핑을 작성해.
+오늘(${today}) 최신 뉴스·리포트·텔레그램을 분석해서 JSON으로 응답해.
 
-형식:
-📌 **핵심 요약** (2~3문장으로 오늘 시장의 핵심)
-📈 **주목 이슈** (중요한 이슈 3가지, 각 1~2문장)
-🔍 **주목 키워드** (쉼표 구분, 5~8개)
+JSON 형식:
+{
+  "weather": {
+    "emoji": "<날씨 이모지>",
+    "label": "<날씨 이름>",
+    "reason": "<한 문장으로 날씨를 선택한 이유>"
+  },
+  "briefing": "<브리핑 전문>"
+}
 
-간결하고 핵심만 담아.`,
+날씨 기준 (반드시 아래 6개 중 하나):
+- {"emoji":"☀️","label":"맑음"} — 전반적 강세, 긍정 뉴스 우세
+- {"emoji":"🌤️","label":"구름 조금"} — 긍정적이나 일부 불확실성
+- {"emoji":"⛅","label":"흐림"} — 혼조세, 방향 불분명
+- {"emoji":"🌧️","label":"비"} — 약세, 부정적 뉴스 우세
+- {"emoji":"⛈️","label":"폭풍"} — 급락·리스크 급등
+- {"emoji":"🌫️","label":"안개"} — 극도의 불확실성
+
+briefing 형식:
+📌 **핵심 요약** (4~5문장으로 오늘 시장의 핵심 흐름과 배경)
+📈 **주목 이슈** (중요한 이슈 5가지, 각 2~3문장으로 맥락과 의미 설명)
+🔍 **주목 키워드** (쉼표 구분, 8~12개)
+💡 **시사점** (2~3문장으로 투자자 관점의 시사점 또는 주의사항)
+
+구체적인 수치·기업명·날짜를 포함해 신뢰도 높은 브리핑을 작성해.`,
       },
       {
         role: "user",
         content: `오늘(${today}) 자료:\n\n${ctx.join("\n\n")}`,
       },
     ],
-    max_tokens: 500,
+    max_tokens: 1200,
     temperature: 0.3,
   });
 
-  const briefing = completion.choices[0].message.content ?? "";
+  const raw = JSON.parse(completion.choices[0].message.content ?? "{}");
+  const briefing: string = raw.briefing ?? "";
+  const weather: { emoji: string; label: string; reason: string } = raw.weather ?? { emoji: "⛅", label: "흐림", reason: "" };
   const date = new Date().toISOString().slice(0, 10);
 
-  return NextResponse.json({ briefing, date }, {
+  return NextResponse.json({ briefing, date, weather }, {
     headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=7200" },
   });
 }
