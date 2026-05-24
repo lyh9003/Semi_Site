@@ -17,19 +17,18 @@ const SYSTEM = `너는 한국 반도체·주식 시황 전문가 AI야.
 - 제공된 자료에 없는 내용은 추측하지 말고 솔직하게 말해
 - 4~6문장으로 간결하게 답변`;
 
-async function matchDocs(fn: string, embedding: number[], extra?: Record<string, unknown>) {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
-      method: "POST",
-      headers: { ...HDR, "Content-Type": "application/json" },
-      body: JSON.stringify({ query_embedding: embedding, match_count: 5, ...extra }),
-      cache: "no-store",
-    });
-    if (!res.ok) return [];
-    return res.json();
-  } catch {
-    return [];
+async function matchDocs(fn: string, embedding: number[], extra?: Record<string, unknown>): Promise<unknown[]> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: { ...HDR, "Content-Type": "application/json" },
+    body: JSON.stringify({ query_embedding: embedding, match_count: 5, ...extra }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`${fn} failed (${res.status}): ${errText}`);
   }
+  return res.json();
 }
 
 // 질문이 최신 시황 관련인지 판단 (true = 최근 14일 검색, false = 전체 시맨틱 검색)
@@ -63,18 +62,29 @@ export async function POST(req: NextRequest) {
   const embedding = embRes.data[0].embedding;
 
   // 2. 검색 전략 분기
-  //    최신 질문 → 최근 14일 필터 함수 / 일반 질문 → 전체 시맨틱 검색
-  const [news, reports, telegrams] = isRecent
-    ? await Promise.all([
+  const searchFns = isRecent
+    ? [
         matchDocs("match_news_recent",     embedding, { since_days: 14 }),
         matchDocs("match_reports_recent",  embedding, { since_days: 14 }),
         matchDocs("match_telegrams_recent",embedding, { since_days: 14 }),
-      ])
-    : await Promise.all([
+      ]
+    : [
         matchDocs("match_news",     embedding),
         matchDocs("match_reports",  embedding),
         matchDocs("match_telegrams",embedding),
-      ]);
+      ];
+
+  const searchResults = await Promise.allSettled(searchFns);
+  const [newsResult, reportsResult, telegramsResult] = searchResults;
+
+  const news      = newsResult.status      === "fulfilled" ? newsResult.value      : [];
+  const reports   = reportsResult.status   === "fulfilled" ? reportsResult.value   : [];
+  const telegrams = telegramsResult.status === "fulfilled" ? telegramsResult.value : [];
+
+  // 실패한 소스 에러 수집 (디버그용)
+  const searchErrors = searchResults
+    .map((r, i) => r.status === "rejected" ? `[${["news","reports","telegrams"][i]}] ${r.reason}` : null)
+    .filter(Boolean);
 
   // 3. 컨텍스트 구성
   const ctx: string[] = [];
@@ -110,7 +120,7 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       try {
         controller.enqueue(encoder.encode(
-          JSON.stringify({ type: "sources", news, reports, telegrams, isRecent }) + "\n"
+          JSON.stringify({ type: "sources", news, reports, telegrams, isRecent, searchErrors }) + "\n"
         ));
         for await (const chunk of completion) {
           const text = chunk.choices[0]?.delta?.content ?? "";
