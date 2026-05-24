@@ -5,28 +5,29 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const HDR = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
-async function fetchRecent(table: string, select: string, dateCol: string, limit: number) {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/${table}?select=${select}&order=${dateCol}.desc&limit=${limit}`,
-    { headers: HDR, next: { revalidate: 3600 } }  // 1시간 캐시
-  );
+async function fetchUrl(url: string) {
+  const res = await fetch(url, { headers: HDR, next: { revalidate: 3600 } });
   return res.ok ? res.json() : [];
 }
 
 export async function GET() {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+
   const [news, reports, telegrams] = await Promise.all([
-    fetchRecent("news", "title,company,date,summary,keyword", "date", 10),
-    fetchRecent("stock_reports", "title,securities_firm,date,one_line_summary,keyword", "date", 5),
-    fetchRecent("telegram_messages", "channel,summary,date_utc,sentiment,keywords", "date_utc", 10),
+    // 최신 날짜 + 중요도 높은 뉴스 (importance=3 우선, 날짜 내림차순)
+    fetchUrl(`${SUPABASE_URL}/rest/v1/news?select=title,company,date,summary,keyword&importance=eq.3&order=date.desc&limit=10`),
+    // 리포트: summary 필드 사용
+    fetchUrl(`${SUPABASE_URL}/rest/v1/stock_reports?select=title,securities_firm,date,summary,keyword&order=date.desc&limit=5`),
+    // 최신 날짜 + 포워드 수 높은 텔레그램
+    fetchUrl(`${SUPABASE_URL}/rest/v1/telegram_messages?select=channel,summary,date_utc,sentiment,keywords&order=date_utc.desc,forward_count.desc&limit=10`),
   ]);
 
   const ctx: string[] = [];
   (news as {date:string;title:string;company:string;summary:string}[]).forEach(n =>
     ctx.push(`[뉴스] (${n.date}) ${n.title}${n.company ? ` — ${n.company}` : ""}\n${n.summary}`)
   );
-  (reports as {date:string;title:string;securities_firm:string;one_line_summary:string}[]).forEach(r =>
-    ctx.push(`[리포트] (${r.date}) ${r.title} — ${r.securities_firm}\n${r.one_line_summary}`)
+  (reports as {date:string;title:string;securities_firm:string;summary:string}[]).forEach(r =>
+    ctx.push(`[리포트] (${r.date}) ${r.title} — ${r.securities_firm}\n${r.summary}`)
   );
   (telegrams as {date_utc:string;channel:string;summary:string;sentiment:string}[]).forEach(t =>
     ctx.push(`[텔레그램] (${t.date_utc?.slice(0,10)}) ${t.channel} [${t.sentiment ?? "중립"}]\n${t.summary}`)
