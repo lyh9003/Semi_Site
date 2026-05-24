@@ -12,10 +12,11 @@ const SYSTEM = `너는 한국 반도체·주식 시황 전문가 AI야.
 
 규칙:
 - 반드시 한국어로 답변
-- 핵심 결론을 먼저, 근거는 간결하게
+- 핵심 결론을 먼저, 이후 근거와 맥락을 충분히 설명
 - 출처는 [뉴스], [리포트], [텔레그램] 태그로 명시
 - 제공된 자료에 없는 내용은 추측하지 말고 솔직하게 말해
-- 4~6문장으로 간결하게 답변`;
+- 구체적인 수치·기업명·날짜를 활용해 신뢰도 높은 답변 작성
+- 8~12문장으로 충분히 답변`;
 
 async function matchDocs(fn: string, embedding: number[], extra?: Record<string, unknown>): Promise<unknown[]> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
@@ -98,9 +99,9 @@ export async function POST(req: NextRequest) {
     ctx.push(`[텔레그램${i+1}] (${t.date_utc?.slice(0,10)}) ${t.channel}\n${t.summary}`)
   );
 
-  // 4. gpt-4o-mini 스트리밍
+  // 4. gpt-4.1-mini 스트리밍
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-4.1-mini",
     messages: [
       { role: "system", content: SYSTEM },
       {
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
       },
     ],
     stream: true,
-    max_tokens: 600,
+    max_tokens: 1200,
     temperature: 0.3,
   });
 
