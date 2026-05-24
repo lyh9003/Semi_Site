@@ -47,7 +47,7 @@ Phase 4  그래프 시각화 + 자연어 질의
 
 **목표**: 키워드 불일치 상황에서도 의미적으로 유사한 항목 연결
 
-**상태**: 🔄 임베딩 생성 대기 중 (SQL 완료, 스크립트 실행 필요)
+**상태**: ✅ 완료
 
 **구현 내용**:
 - SQL: `supabase/migrations/003_add_embeddings.sql` — pgvector 확장, 벡터 컬럼, HNSW 인덱스, RPC 3개
@@ -63,11 +63,8 @@ Phase 4  그래프 시각화 + 자연어 질의
 - ✅ .env.local에 OPENAI_API_KEY 저장
 - ✅ app/api/insight/similar/route.ts 작성 (Vercel 호환)
 
-**다음 실행 필요**:
-```powershell
-# 임베딩 생성 (뉴스 2000 + 리포트 584 + 텔레그램 2000건, 약 5~10분)
-python generate_embeddings.py
-```
+**임베딩 결과** (2026-05-23):
+- 뉴스 1,000건 / 리포트 584건 / 텔레그램 1,000건 모두 성공
 
 **파일**:
 - `supabase/migrations/003_add_embeddings.sql`

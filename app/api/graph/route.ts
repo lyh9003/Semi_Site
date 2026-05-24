@@ -1,0 +1,60 @@
+import { NextRequest, NextResponse } from "next/server";
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+const HDR = {
+  apikey: SUPABASE_KEY,
+  Authorization: `Bearer ${SUPABASE_KEY}`,
+};
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const type = searchParams.get("type") || "";    // 필터: company|product|metric|event|sector
+  const limit = parseInt(searchParams.get("limit") || "150");
+  const minWeight = parseInt(searchParams.get("minWeight") || "2");
+
+  const entitiesParams = new URLSearchParams({
+    select: "id,name,type,mention_count",
+    limit: String(limit * 3),
+    order: "mention_count.desc",
+  });
+  if (type) entitiesParams.set("type", `eq.${type}`);
+
+  const [entRes, relRes] = await Promise.all([
+    fetch(`${SUPABASE_URL}/rest/v1/entities?${entitiesParams}`, {
+      headers: HDR, cache: "no-store",
+    }),
+    fetch(
+      `${SUPABASE_URL}/rest/v1/entity_relations?select=from_entity_id,to_entity_id,weight&weight=gte.${minWeight}&order=weight.desc&limit=2000`,
+      { headers: HDR, cache: "no-store" }
+    ),
+  ]);
+
+  if (!entRes.ok || !relRes.ok) {
+    return NextResponse.json({ error: "fetch failed" }, { status: 500 });
+  }
+
+  const allEntities: { id: number; name: string; type: string; mention_count: number }[] = await entRes.json();
+  const allRelations: { from_entity_id: number; to_entity_id: number; weight: number }[] = await relRes.json();
+
+  // relation에 등장하는 entity id 집합
+  const connectedIds = new Set<number>();
+  allRelations.forEach(r => {
+    connectedIds.add(r.from_entity_id);
+    connectedIds.add(r.to_entity_id);
+  });
+
+  // 연결된 엔티티만 노드로 사용 (limit 적용), camelCase 변환
+  const nodes = allEntities
+    .filter(e => connectedIds.has(e.id))
+    .slice(0, limit)
+    .map(e => ({ id: e.id, name: e.name, type: e.type, mentionCount: e.mention_count }));
+
+  const nodeIds = new Set(nodes.map(n => n.id));
+  const edges = allRelations.filter(
+    r => nodeIds.has(r.from_entity_id) && nodeIds.has(r.to_entity_id)
+  );
+
+  return NextResponse.json({ nodes, edges });
+}

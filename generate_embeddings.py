@@ -87,27 +87,28 @@ def get_embeddings_batch(texts: list[str]) -> list[list[float] | None]:
     return [None] * len(texts)
 
 
-def process_table(cfg: dict):
-    table = cfg["name"]
-    print(f"\n{'─'*40}\n[{table}] 처리 시작")
+PAGE_SIZE = 1000  # Supabase REST API 최대 1회 조회 한도
+BATCH = 50
 
-    try:
-        r = httpx.get(f"{BASE}/{table}", headers=READ_HDR, params={
-            "select": cfg["select"], "embedding": "is.null", "limit": "2000",
-        }, timeout=20)
-        r.raise_for_status()
-    except Exception as e:
-        print(f"  조회 실패: {e}"); return
 
-    items = r.json()
-    print(f"  임베딩 필요: {len(items)}건")
-    if not items:
-        print("  ✅ 모두 처리됨"); return
+def fetch_page(table: str, select: str, cursor_id: int | None) -> list:
+    """embedding IS NULL 인 행을 최신(id DESC) 순으로 cursor_id 기준 PAGE_SIZE개 가져온다."""
+    params: dict = {
+        "select": select,
+        "embedding": "is.null",
+        "order": "id.desc",
+        "limit": str(PAGE_SIZE),
+    }
+    if cursor_id is not None:
+        params["id"] = f"lt.{cursor_id}"
+    r = httpx.get(f"{BASE}/{table}", headers=READ_HDR, params=params, timeout=30)
+    r.raise_for_status()
+    return r.json()
 
-    # 텍스트 준비
-    texts = [cfg["text_fn"](item) for item in items]
 
-    BATCH = 50
+def embed_and_save(table: str, items: list, text_fn) -> tuple[int, int]:
+    """items 리스트에 대해 임베딩 생성 후 Supabase 저장. (success, skip) 반환."""
+    texts = [text_fn(item) for item in items]
     success = skip = 0
 
     for b_start in range(0, len(items), BATCH):
@@ -116,7 +117,8 @@ def process_table(cfg: dict):
 
         valid_indices = [i for i, t in enumerate(batch_texts) if t and len(t) >= 5]
         if not valid_indices:
-            skip += len(batch_items); continue
+            skip += len(batch_items)
+            continue
 
         valid_texts = [batch_texts[i] for i in valid_indices]
         embeddings = get_embeddings_batch(valid_texts)
@@ -141,11 +143,44 @@ def process_table(cfg: dict):
             except Exception as e:
                 print(f"  저장 오류 ID {item['id']}: {e}"); skip += 1
 
-        end = min(b_start + BATCH, len(items))
-        print(f"  [{end}/{len(items)}] 배치 완료")
-        time.sleep(0.3)
+        time.sleep(0.2)
 
-    print(f"  ✅ 성공:{success} / 건너뜀:{skip} / 전체:{len(items)}")
+    return success, skip
+
+
+def process_table(cfg: dict):
+    table = cfg["name"]
+    print(f"\n{'─'*40}\n[{table}] 처리 시작")
+
+    total_success = total_skip = total_processed = 0
+    page = 0
+    cursor_id = None  # 커서 방식: 마지막으로 처리한 id 기준
+
+    while True:
+        try:
+            items = fetch_page(table, cfg["select"], cursor_id)
+        except Exception as e:
+            print(f"  조회 실패 (cursor={cursor_id}): {e}"); break
+
+        if not items:
+            break
+
+        print(f"  페이지 {page+1}: {len(items)}건 처리 중...")
+        s, sk = embed_and_save(table, items, cfg["text_fn"])
+        total_success += s
+        total_skip += sk
+        total_processed += len(items)
+        print(f"  페이지 {page+1} 완료 — 성공:{s} 건너뜀:{sk}")
+
+        if len(items) < PAGE_SIZE:
+            break  # 마지막 페이지
+        cursor_id = items[-1]["id"]  # 가장 작은 id (id DESC 정렬)
+        page += 1
+
+    if total_processed == 0:
+        print("  ✅ 모두 처리됨")
+    else:
+        print(f"  ✅ 성공:{total_success} / 건너뜀:{total_skip} / 전체:{total_processed}")
 
 
 if __name__ == "__main__":
