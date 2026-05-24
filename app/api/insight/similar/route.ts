@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const THRESHOLD = 0.4;
+  const THRESHOLD = 0.3;
   const COUNT = 6;
 
   const [news, reports, telegrams] = await Promise.all([
