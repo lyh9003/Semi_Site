@@ -61,7 +61,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const THRESHOLD = 0.3;
+  // 0.1: 교차 타입(리포트↔뉴스/텔레그램) 비교 시 문체 차이로 유사도가 낮아지는 문제 대응
+  const THRESHOLD = 0.1;
   const COUNT = 6;
 
   const [news, reports, telegrams] = await Promise.all([
