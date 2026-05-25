@@ -9,18 +9,23 @@ interface Node extends d3.SimulationNodeDatum {
   name: string;
   type: string;
   mentionCount?: number;
+  isHot?: boolean;
 }
 interface Edge {
   from_entity_id: number;
   to_entity_id: number;
   weight: number;
+  relation_type?: string;
+  relation_desc?: string;
 }
 interface SimLink extends d3.SimulationLinkDatum<Node> {
   weight: number;
+  relation_type?: string;
+  relation_desc?: string;
 }
 interface EntityDoc {
   news: {id:number;title:string;company:string;date:string;summary:string;link:string}[];
-  reports: {id:number;title:string;securities_firm:string;date:string;one_line_summary:string;link:string}[];
+  reports: {id:number;title:string;securities_firm:string;date:string;summary:string;link:string}[];
   telegrams: {id:number;channel:string;summary:string;date_utc:string;sentiment:string}[];
   total: number;
 }
@@ -40,26 +45,40 @@ const TYPE_LABEL: Record<string, string> = {
   event:   "이벤트",
   sector:  "섹터",
 };
-
+const RELATION_COLOR: Record<string, string> = {
+  수혜:     "#10b981",  // emerald
+  공급망:   "#3b82f6",  // blue
+  경쟁:     "#ef4444",  // red
+  수요연동: "#f59e0b",  // amber
+  리스크:   "#dc2626",  // dark red
+  양방향:   "#8b5cf6",  // purple
+  포함관계: "#94a3b8",  // slate
+  무관계:   "#e2e8f0",  // light gray
+};
+const RELATION_TYPES_ALL = Object.keys(RELATION_COLOR);
 const ENTITY_TYPES = ["", "company", "product", "metric", "event", "sector"];
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function GraphPage() {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [edges, setEdges] = useState<Edge[]>([]);
-  const [loading, setLoading] = useState(true);
+  const svgRef        = useRef<SVGSVGElement>(null);
+  const tooltipRef    = useRef<HTMLDivElement>(null);
+  const [nodes, setNodes]             = useState<Node[]>([]);
+  const [edges, setEdges]             = useState<Edge[]>([]);
+  const [loading, setLoading]         = useState(true);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [entityDocs, setEntityDocs] = useState<EntityDoc | null>(null);
+  const [entityDocs, setEntityDocs]   = useState<EntityDoc | null>(null);
   const [docsLoading, setDocsLoading] = useState(false);
-  const [summary, setSummary] = useState("");
+  const [summary, setSummary]         = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [filterType, setFilterType] = useState("");
-  const [minWeight, setMinWeight] = useState(3);
-  const [search, setSearch] = useState("");
+  const [narrative, setNarrative]     = useState("");
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
+  const [filterType, setFilterType]   = useState("");
+  const [minWeight, setMinWeight]     = useState(3);
+  const [search, setSearch]           = useState("");
+  const [showHotOnly, setShowHotOnly] = useState(false);
+  const [activeTab, setActiveTab]     = useState<"docs"|"narrative">("narrative");
   const simulationRef = useRef<d3.Simulation<Node, SimLink> | null>(null);
 
-  // 데이터 로드
   const loadGraph = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams({
@@ -78,15 +97,16 @@ export default function GraphPage() {
 
   useEffect(() => { loadGraph(); }, [loadGraph]);
 
-  // 노드 클릭 → 문서 조회 + AI 요약
   const handleNodeClick = useCallback(async (node: Node) => {
     setSelectedNode(node);
     setDocsLoading(true);
     setEntityDocs(null);
     setSummary("");
     setSummaryLoading(true);
+    setNarrative("");
+    setNarrativeLoading(true);
+    setActiveTab("narrative");
 
-    // 문서 + 요약 병렬 요청
     const [docsRes, sumRes] = await Promise.all([
       fetch(`/api/graph/entity?id=${node.id}`),
       fetch("/api/graph/summary", {
@@ -100,7 +120,6 @@ export default function GraphPage() {
     setEntityDocs(data);
     setDocsLoading(false);
 
-    // 요약 스트리밍 읽기
     if (sumRes.ok && sumRes.body) {
       const reader = sumRes.body.getReader();
       const decoder = new TextDecoder();
@@ -113,58 +132,148 @@ export default function GraphPage() {
     setSummaryLoading(false);
   }, []);
 
-  // D3 그래프 렌더링
+  // 내러티브: 선택 노드의 이웃 관계를 edges에서 뽑아 API 호출
+  const loadNarrative = useCallback(async (node: Node, allEdges: Edge[]) => {
+    setNarrative("");
+    setNarrativeLoading(true);
+
+    const nodeMap = new Map<number, Node>();
+    nodes.forEach(n => nodeMap.set(n.id, n));
+
+    const relations = allEdges
+      .filter(e => e.from_entity_id === node.id || e.to_entity_id === node.id)
+      .map(e => {
+        const isOut = e.from_entity_id === node.id;
+        const neighbor = nodeMap.get(isOut ? e.to_entity_id : e.from_entity_id);
+        if (!neighbor) return null;
+        return {
+          neighborName: neighbor.name,
+          neighborType: neighbor.type,
+          direction: isOut ? "outgoing" : "incoming",
+          relation_type: e.relation_type,
+          relation_desc: e.relation_desc,
+          weight: e.weight,
+        };
+      })
+      .filter(Boolean);
+
+    const res = await fetch("/api/graph/narrative", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entityName: node.name, entityType: node.type, relations }),
+    });
+
+    if (res.ok && res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setNarrative(prev => prev + decoder.decode(value, { stream: true }));
+      }
+    }
+    setNarrativeLoading(false);
+  }, [nodes]);
+
+  useEffect(() => {
+    if (selectedNode && edges.length > 0) {
+      loadNarrative(selectedNode, edges);
+    }
+  }, [selectedNode, edges, loadNarrative]);
+
+  // D3 렌더링
   useEffect(() => {
     if (!svgRef.current || nodes.length === 0) return;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
-    const width = svgRef.current.clientWidth || 800;
+    const width  = svgRef.current.clientWidth  || 800;
     const height = svgRef.current.clientHeight || 600;
 
-    // 줌
     const g = svg.append("g");
     svg.call(
       d3.zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 4])
-        .on("zoom", (event) => g.attr("transform", event.transform))
+        .on("zoom", event => g.attr("transform", event.transform))
     );
 
-    // 링크 데이터
+    // 화살표 마커 정의 (관계 유형별)
+    const defs = svg.append("defs");
+    const markerTypes = [...RELATION_TYPES_ALL, "default"];
+    markerTypes.forEach(rtype => {
+      const color = RELATION_COLOR[rtype] ?? "#cbd5e1";
+      defs.append("marker")
+        .attr("id", `arrow-${rtype.replace(/\s/g, "")}`)
+        .attr("viewBox", "0 -4 8 8")
+        .attr("refX", 18)
+        .attr("refY", 0)
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path")
+        .attr("d", "M0,-4L8,0L0,4")
+        .attr("fill", color)
+        .attr("opacity", 0.8);
+    });
+
     const nodeById = new Map(nodes.map(n => [n.id, n]));
+    const filteredNodes = showHotOnly ? nodes.filter(n => n.isHot) : nodes;
+    const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
+
     const simLinks: SimLink[] = edges
-      .filter(e => nodeById.has(e.from_entity_id) && nodeById.has(e.to_entity_id))
+      .filter(e => filteredNodeIds.has(e.from_entity_id) && filteredNodeIds.has(e.to_entity_id))
       .map(e => ({
         source: nodeById.get(e.from_entity_id)!,
         target: nodeById.get(e.to_entity_id)!,
         weight: e.weight,
+        relation_type: e.relation_type,
+        relation_desc: e.relation_desc,
       }));
 
-    // 시뮬레이션
-    const simulation = d3.forceSimulation<Node>(nodes)
+    const simulation = d3.forceSimulation<Node>(filteredNodes)
       .force("link", d3.forceLink<Node, SimLink>(simLinks)
         .id(d => d.id)
-        .distance(d => Math.max(60, 120 - d.weight * 3)))
-      .force("charge", d3.forceManyBody().strength(-120))
+        .distance(d => Math.max(60, 120 - d.weight * 2)))
+      .force("charge", d3.forceManyBody().strength(-130))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide<Node>(d => Math.max(5, Math.min(18, 5 + Math.sqrt(d.mentionCount ?? 1))) + 4));
+      .force("collision", d3.forceCollide<Node>(
+        d => Math.max(5, Math.min(18, 5 + Math.sqrt(d.mentionCount ?? 1))) + 4
+      ));
 
     simulationRef.current = simulation;
 
-    // 엣지 그리기
+    // 엣지
     const link = g.append("g")
       .selectAll("line")
       .data(simLinks)
       .join("line")
-      .attr("stroke", "#e2e8f0")
-      .attr("stroke-width", d => Math.min(d.weight * 0.4, 4))
-      .attr("stroke-opacity", 0.6);
+      .attr("stroke", d => RELATION_COLOR[d.relation_type ?? ""] ?? "#cbd5e1")
+      .attr("stroke-width", d => Math.min(d.weight * 0.3, 3.5))
+      .attr("stroke-opacity", d => d.relation_type && d.relation_type !== "무관계" ? 0.75 : 0.3)
+      .attr("marker-end", d => {
+        const key = (d.relation_type ?? "default").replace(/\s/g, "");
+        return `url(#arrow-${key})`;
+      })
+      .style("cursor", "pointer")
+      .on("mousemove", (event, d) => {
+        if (!tooltipRef.current || !d.relation_desc) return;
+        const tooltip = tooltipRef.current;
+        tooltip.style.display = "block";
+        tooltip.style.left = `${event.pageX + 12}px`;
+        tooltip.style.top  = `${event.pageY - 28}px`;
+        tooltip.innerHTML =
+          `<span class="font-semibold" style="color:${RELATION_COLOR[d.relation_type ?? ""] ?? "#94a3b8"}">${d.relation_type ?? ""}</span>` +
+          `<br/>${d.relation_desc ?? ""}`;
+      })
+      .on("mouseleave", () => {
+        if (tooltipRef.current) tooltipRef.current.style.display = "none";
+      });
 
-    // 노드 그리기
-    const node = g.append("g")
+    // 노드
+    const nodeG = g.append("g")
       .selectAll<SVGGElement, Node>("g")
-      .data(nodes)
+      .data(filteredNodes)
       .join("g")
       .style("cursor", "pointer")
       .call(
@@ -181,31 +290,42 @@ export default function GraphPage() {
       )
       .on("click", (_, d) => handleNodeClick(d));
 
-    node.append("circle")
+    // 핫 노드 펄스 링
+    nodeG.filter(d => !!d.isHot)
+      .append("circle")
+      .attr("r", d => Math.max(5, Math.min(18, 5 + Math.sqrt(d.mentionCount ?? 1))) + 6)
+      .attr("fill", "none")
+      .attr("stroke", "#fb923c")
+      .attr("stroke-width", 2)
+      .attr("stroke-dasharray", "4 2")
+      .attr("opacity", 0.8);
+
+    nodeG.append("circle")
       .attr("r", d => Math.max(5, Math.min(18, 5 + Math.sqrt(d.mentionCount ?? 1))))
       .attr("fill", d => TYPE_COLOR[d.type] ?? "#94a3b8")
-      .attr("stroke", "#fff")
-      .attr("stroke-width", 1.5)
-      .attr("opacity", 0.9);
+      .attr("stroke", d => d.isHot ? "#fb923c" : "#fff")
+      .attr("stroke-width", d => d.isHot ? 2.5 : 1.5)
+      .attr("opacity", 0.92);
 
-    node.append("text")
+    nodeG.append("text")
       .text(d => d.name)
       .attr("x", 10)
       .attr("y", 4)
       .attr("font-size", "10px")
-      .attr("fill", "#475569")
+      .attr("fill", d => d.isHot ? "#ea580c" : "#475569")
+      .attr("font-weight", d => d.isHot ? "600" : "normal")
       .attr("pointer-events", "none");
 
     // 검색 하이라이트
     if (search) {
       const q = search.toLowerCase();
-      node.select("circle")
+      nodeG.select("circle:last-of-type")
         .attr("r", d => {
           const base = Math.max(5, Math.min(18, 5 + Math.sqrt(d.mentionCount ?? 1)));
           return d.name.toLowerCase().includes(q) ? base + 6 : base;
         })
-        .attr("stroke", d => d.name.toLowerCase().includes(q) ? "#1d4ed8" : "#fff")
-        .attr("stroke-width", d => d.name.toLowerCase().includes(q) ? 3 : 1.5);
+        .attr("stroke", d => d.name.toLowerCase().includes(q) ? "#1d4ed8" : (d.isHot ? "#fb923c" : "#fff"))
+        .attr("stroke-width", d => d.name.toLowerCase().includes(q) ? 3 : (d.isHot ? 2.5 : 1.5));
     }
 
     simulation.on("tick", () => {
@@ -214,11 +334,13 @@ export default function GraphPage() {
         .attr("y1", d => (d.source as Node).y!)
         .attr("x2", d => (d.target as Node).x!)
         .attr("y2", d => (d.target as Node).y!);
-      node.attr("transform", d => `translate(${d.x},${d.y})`);
+      nodeG.attr("transform", d => `translate(${d.x},${d.y})`);
     });
 
     return () => { simulation.stop(); };
-  }, [nodes, edges, search, handleNodeClick]);
+  }, [nodes, edges, search, handleNodeClick, showHotOnly]);
+
+  const hotCount = nodes.filter(n => n.isHot).length;
 
   return (
     <div className="flex h-[calc(100vh-64px)] overflow-hidden">
@@ -227,7 +349,7 @@ export default function GraphPage() {
       <div className="w-64 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col overflow-y-auto">
         <div className="p-4 border-b border-slate-100">
           <h1 className="text-base font-bold text-slate-800">🕸️ 지식 그래프</h1>
-          <p className="text-xs text-slate-400 mt-0.5">엔티티 간 공동출현 관계</p>
+          <p className="text-xs text-slate-400 mt-0.5">엔티티 간 시황 관계 탐색</p>
         </div>
 
         <div className="p-3 space-y-3">
@@ -241,6 +363,25 @@ export default function GraphPage() {
               onChange={e => setSearch(e.target.value)}
               className="mt-1 w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-1 focus:ring-blue-400"
             />
+          </div>
+
+          {/* 핫 노드 토글 */}
+          <div>
+            <button
+              onClick={() => setShowHotOnly(v => !v)}
+              className={`w-full text-xs px-3 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 ${
+                showHotOnly
+                  ? "bg-orange-500 text-white"
+                  : "bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100"
+              }`}
+            >
+              🔥 최근 14일 급등 엔티티
+              {hotCount > 0 && (
+                <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full ${showHotOnly ? "bg-orange-400 text-white" : "bg-orange-100 text-orange-600"}`}>
+                  {hotCount}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* 타입 필터 */}
@@ -282,9 +423,20 @@ export default function GraphPage() {
           </div>
         </div>
 
-        {/* 범례 */}
-        <div className="p-3 mt-auto border-t border-slate-100">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">범례</p>
+        {/* 관계 유형 범례 */}
+        <div className="p-3 border-t border-slate-100">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">관계 유형</p>
+          {Object.entries(RELATION_COLOR).filter(([k]) => k !== "무관계").map(([rtype, color]) => (
+            <div key={rtype} className="flex items-center gap-2 mb-1">
+              <span className="w-5 h-0.5 flex-shrink-0 rounded" style={{ background: color }} />
+              <span className="text-xs text-slate-600">{rtype}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 노드 타입 범례 */}
+        <div className="p-3 border-t border-slate-100">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">노드 타입</p>
           {Object.entries(TYPE_LABEL).map(([t, label]) => (
             <div key={t} className="flex items-center gap-2 mb-1">
               <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: TYPE_COLOR[t] }} />
@@ -314,13 +466,20 @@ export default function GraphPage() {
           <svg ref={svgRef} className="w-full h-full" />
         )}
         <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 bg-white/80 px-2 py-1 rounded">
-          스크롤: 줌 · 드래그: 이동 · 노드 클릭: 문서 보기
+          스크롤: 줌 · 드래그: 이동 · 노드 클릭: 분석
         </div>
+        {/* 엣지 툴팁 */}
+        <div
+          ref={tooltipRef}
+          className="fixed z-50 hidden max-w-xs text-xs bg-slate-800 text-white px-3 py-2 rounded-lg shadow-xl pointer-events-none leading-relaxed"
+          style={{ display: "none" }}
+        />
       </div>
 
-      {/* ── 오른쪽: 선택 엔티티 문서 패널 ── */}
+      {/* ── 오른쪽: 선택 엔티티 패널 ── */}
       {selectedNode && (
-        <div className="w-80 flex-shrink-0 bg-white border-l border-slate-200 flex flex-col overflow-hidden">
+        <div className="w-96 flex-shrink-0 bg-white border-l border-slate-200 flex flex-col overflow-hidden">
+          {/* 헤더 */}
           <div className="p-4 border-b border-slate-100 flex-shrink-0">
             <div className="flex items-center gap-2 mb-1">
               <span
@@ -329,6 +488,11 @@ export default function GraphPage() {
               >
                 {TYPE_LABEL[selectedNode.type] ?? selectedNode.type}
               </span>
+              {selectedNode.isHot && (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-orange-100 text-orange-600">
+                  🔥 최근 급등
+                </span>
+              )}
               <button onClick={() => setSelectedNode(null)} className="ml-auto text-slate-400 hover:text-slate-600 text-lg leading-none">×</button>
             </div>
             <h2 className="text-base font-bold text-slate-800">{selectedNode.name}</h2>
@@ -337,48 +501,128 @@ export default function GraphPage() {
             )}
           </div>
 
-          {/* AI 요약 */}
-          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
-            {summaryLoading && !summary && (
-              <p className="text-xs text-slate-400 flex items-center gap-1">
-                <span className="animate-spin inline-block">⚙️</span> AI 요약 생성 중...
-              </p>
-            )}
-            {(summary || summaryLoading) && (
-              <p className="text-xs text-slate-700 leading-relaxed">
-                {summary}
-                {summaryLoading && <span className="animate-pulse">▌</span>}
-              </p>
-            )}
+          {/* 탭 */}
+          <div className="flex border-b border-slate-100 flex-shrink-0">
+            {(["narrative", "docs"] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 text-xs py-2.5 font-semibold transition-colors ${
+                  activeTab === tab
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-slate-400 hover:text-slate-600"
+                }`}
+              >
+                {tab === "narrative" ? "🔗 시황 흐름 분석" : "📄 관련 문서"}
+              </button>
+            ))}
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {docsLoading && (
-              <div className="p-6 text-center text-slate-400 text-sm">
-                <div className="text-2xl mb-2 animate-spin inline-block">⚙️</div>
-                <p>문서 조회 중...</p>
+            {/* 시황 흐름 탭 */}
+            {activeTab === "narrative" && (
+              <div className="p-4 space-y-4">
+                {/* 관계 기반 내러티브 */}
+                <div className="bg-blue-50 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-blue-700 mb-2">📡 관계 기반 시황 흐름</p>
+                  {narrativeLoading && !narrative && (
+                    <p className="text-xs text-slate-400 flex items-center gap-1">
+                      <span className="animate-spin inline-block">⚙️</span> 관계 분석 중...
+                    </p>
+                  )}
+                  {(narrative || narrativeLoading) && (
+                    <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {narrative}
+                      {narrativeLoading && <span className="animate-pulse">▌</span>}
+                    </p>
+                  )}
+                </div>
+
+                {/* 연결된 관계 목록 */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">연결 관계</p>
+                  {edges
+                    .filter(e => e.from_entity_id === selectedNode.id || e.to_entity_id === selectedNode.id)
+                    .filter(e => e.relation_type && e.relation_type !== "무관계")
+                    .sort((a, b) => b.weight - a.weight)
+                    .slice(0, 12)
+                    .map((e, i) => {
+                      const isOut = e.from_entity_id === selectedNode.id;
+                      const neighborId = isOut ? e.to_entity_id : e.from_entity_id;
+                      const neighbor = nodes.find(n => n.id === neighborId);
+                      const color = RELATION_COLOR[e.relation_type ?? ""] ?? "#94a3b8";
+                      return (
+                        <div key={i} className="flex items-start gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                          <span className="text-[10px] mt-0.5 flex-shrink-0 text-slate-400">
+                            {isOut ? "→" : "←"}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-medium text-slate-700">{neighbor?.name ?? "?"}</span>
+                              <span
+                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                                style={{ background: `${color}20`, color }}
+                              >
+                                {e.relation_type}
+                              </span>
+                            </div>
+                            {e.relation_desc && (
+                              <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">{e.relation_desc}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+
+                {/* 문서 기반 AI 요약 */}
+                {(summary || summaryLoading) && (
+                  <div className="bg-slate-50 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-slate-500 mb-2">📰 문서 기반 AI 요약</p>
+                    {summaryLoading && !summary && (
+                      <p className="text-xs text-slate-400 flex items-center gap-1">
+                        <span className="animate-spin inline-block">⚙️</span> 요약 생성 중...
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {summary}
+                      {summaryLoading && <span className="animate-pulse">▌</span>}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
-            {entityDocs && !docsLoading && (
+            {/* 문서 탭 */}
+            {activeTab === "docs" && (
               <>
-                {entityDocs.news.length > 0 && (
-                  <DocSection title="뉴스" color="blue" docs={entityDocs.news.map(n => ({
-                    id: n.id, title: n.title, sub: n.company, date: n.date?.slice(0,10), body: n.summary, link: n.link
-                  }))} />
+                {docsLoading && (
+                  <div className="p-6 text-center text-slate-400 text-sm">
+                    <div className="text-2xl mb-2 animate-spin inline-block">⚙️</div>
+                    <p>문서 조회 중...</p>
+                  </div>
                 )}
-                {entityDocs.reports.length > 0 && (
-                  <DocSection title="증권리포트" color="purple" docs={entityDocs.reports.map(r => ({
-                    id: r.id, title: r.title, sub: r.securities_firm, date: r.date?.slice(0,10), body: r.one_line_summary, link: r.link
-                  }))} />
-                )}
-                {entityDocs.telegrams.length > 0 && (
-                  <DocSection title="텔레그램" color="teal" docs={entityDocs.telegrams.map(t => ({
-                    id: t.id, title: t.summary || "(메시지)", sub: t.channel, date: t.date_utc?.slice(0,10), body: "", link: undefined
-                  }))} />
-                )}
-                {entityDocs.news.length + entityDocs.reports.length + entityDocs.telegrams.length === 0 && (
-                  <p className="p-6 text-center text-slate-400 text-sm">표시할 문서가 없습니다</p>
+                {entityDocs && !docsLoading && (
+                  <>
+                    {entityDocs.news.length > 0 && (
+                      <DocSection title="뉴스" color="blue" docs={entityDocs.news.map(n => ({
+                        id: n.id, title: n.title, sub: n.company, date: n.date?.slice(0,10), body: n.summary, link: n.link
+                      }))} />
+                    )}
+                    {entityDocs.reports.length > 0 && (
+                      <DocSection title="증권리포트" color="purple" docs={entityDocs.reports.map(r => ({
+                        id: r.id, title: r.title, sub: r.securities_firm, date: r.date?.slice(0,10), body: r.summary, link: r.link
+                      }))} />
+                    )}
+                    {entityDocs.telegrams.length > 0 && (
+                      <DocSection title="텔레그램" color="teal" docs={entityDocs.telegrams.map(t => ({
+                        id: t.id, title: t.summary || "(메시지)", sub: t.channel, date: t.date_utc?.slice(0,10), body: "", link: undefined
+                      }))} />
+                    )}
+                    {entityDocs.news.length + entityDocs.reports.length + entityDocs.telegrams.length === 0 && (
+                      <p className="p-6 text-center text-slate-400 text-sm">표시할 문서가 없습니다</p>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -389,16 +633,16 @@ export default function GraphPage() {
   );
 }
 
-// ─── 문서 섹션 컴포넌트 ───────────────────────────────────────────────────────
+// ─── 문서 섹션 ────────────────────────────────────────────────────────────────
 function DocSection({ title, color, docs }: {
   title: string;
   color: string;
   docs: { id: number; title: string; sub?: string; date?: string; body?: string; link?: string }[];
 }) {
   const headerCls: Record<string, string> = {
-    blue: "bg-blue-50 text-blue-700 border-blue-100",
+    blue:   "bg-blue-50 text-blue-700 border-blue-100",
     purple: "bg-purple-50 text-purple-700 border-purple-100",
-    teal: "bg-teal-50 text-teal-700 border-teal-100",
+    teal:   "bg-teal-50 text-teal-700 border-teal-100",
   };
   return (
     <div className="border-b border-slate-100">

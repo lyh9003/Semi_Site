@@ -6,8 +6,10 @@ on:
   workflow_dispatch:       # 수동 실행 가능
 
 jobs:
-  update:
+  embeddings:
+    name: Generate Embeddings
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
 
@@ -28,11 +30,11 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then echo "❌ NEXT_PUBLIC_SUPABASE_URL not set"; exit 1; fi
-          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then echo "❌ SUPABASE_SERVICE_ROLE_KEY not set"; exit 1; fi
-          if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then echo "❌ NEXT_PUBLIC_SUPABASE_ANON_KEY not set"; exit 1; fi
-          if [ -z "$OPENAI_API_KEY" ]; then echo "❌ OPENAI_API_KEY not set"; exit 1; fi
-          echo "✅ Secrets OK"
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then echo "NEXT_PUBLIC_SUPABASE_URL not set"; exit 1; fi
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then echo "SUPABASE_SERVICE_ROLE_KEY not set"; exit 1; fi
+          if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then echo "NEXT_PUBLIC_SUPABASE_ANON_KEY not set"; exit 1; fi
+          if [ -z "$OPENAI_API_KEY" ]; then echo "OPENAI_API_KEY not set"; exit 1; fi
+          echo "Secrets OK"
 
       - name: Generate embeddings (신규 문서만)
         env:
@@ -41,6 +43,24 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python generate_embeddings.py
+
+  knowledge-graph:
+    name: Update Knowledge Graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: embeddings        # 임베딩 완료 후 실행
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install httpx
 
       - name: Update knowledge graph (신규 멘션·관계)
         env:
