@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     ),
     fetch(
       `${SUPABASE_URL}/rest/v1/entity_mentions` +
-      `?select=entity_id&date=gte.${since}&limit=5000`,
+      `?select=entity_id&created_at=gte.${since}&limit=5000`,
       { headers: HDR, cache: "no-store" }
     ),
   ]);
