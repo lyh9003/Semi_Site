@@ -75,7 +75,7 @@ export default function GraphPage() {
   const [filterType, setFilterType]   = useState("");
   const [minWeight, setMinWeight]     = useState(3);
   const [search, setSearch]           = useState("");
-  const [showHotOnly, setShowHotOnly] = useState(false);
+  const [showHotOnly, setShowHotOnly] = useState(true);
   const [activeTab, setActiveTab]     = useState<"docs"|"narrative">("narrative");
   const simulationRef = useRef<d3.Simulation<Node, SimLink> | null>(null);
 
@@ -234,11 +234,11 @@ export default function GraphPage() {
     const simulation = d3.forceSimulation<Node>(filteredNodes)
       .force("link", d3.forceLink<Node, SimLink>(simLinks)
         .id(d => d.id)
-        .distance(d => Math.max(60, 120 - d.weight * 2)))
-      .force("charge", d3.forceManyBody().strength(-130))
+        .distance(d => Math.max(100, 200 - d.weight * 3)))
+      .force("charge", d3.forceManyBody().strength(-400))
       .force("center", d3.forceCenter(width / 2, height / 2))
       .force("collision", d3.forceCollide<Node>(
-        d => Math.max(5, Math.min(18, 5 + Math.sqrt(d.mentionCount ?? 1))) + 4
+        d => Math.max(5, Math.min(18, 5 + Math.sqrt(d.mentionCount ?? 1))) + 16
       ));
 
     simulationRef.current = simulation;
