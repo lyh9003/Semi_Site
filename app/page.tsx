@@ -21,20 +21,12 @@ export default async function HomePage() {
     .order("date", { ascending: false })
     .limit(6);
 
-  const { count: reportCount } = await supabase
-    .from("stock_reports")
-    .select("id", { count: "exact", head: true });
-
   const { data: latestReport } = await supabase
     .from("stock_reports")
     .select("*")
     .order("date", { ascending: false })
     .limit(1)
     .single();
-
-  const { count: newsCount } = await supabase
-    .from("news")
-    .select("id", { count: "exact", head: true });
 
   const { data: memoryPriceMsg } = await supabase
     .from("telegram_messages")
@@ -54,9 +46,6 @@ export default async function HomePage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* 일일 시황 브리핑 */}
-      <DailyBriefing />
-
       {/* 히어로 섹션 */}
       <section className="text-center pt-6 pb-4 mb-6">
         <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 text-xs font-medium px-3 py-1.5 rounded-full mb-3 border border-blue-100">
@@ -88,20 +77,8 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* 통계 */}
-      <section className="grid grid-cols-3 gap-3 mb-6">
-        {[
-          { label: "수집된 뉴스", value: `${newsCount ?? 0}+`, icon: "📰" },
-          { label: "증권 리포트", value: `${reportCount ?? 0}+`, icon: "📊" },
-          { label: "커버 키워드", value: "50+", icon: "🏷️" },
-        ].map((stat) => (
-          <div key={stat.label} className="bg-white rounded-xl border border-slate-200 p-3 sm:p-5 text-center">
-            <div className="text-2xl sm:text-3xl mb-1 sm:mb-2">{stat.icon}</div>
-            <div className="text-lg sm:text-2xl font-bold text-slate-800">{stat.value}</div>
-            <div className="text-xs sm:text-sm text-slate-500 mt-0.5">{stat.label}</div>
-          </div>
-        ))}
-      </section>
+      {/* 일일 시황 브리핑 */}
+      <DailyBriefing />
 
       {/* 메모리 판가 */}
       {memoryPriceMsg && (
