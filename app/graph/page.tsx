@@ -4,12 +4,14 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import * as d3 from "d3";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface Node extends d3.SimulationNodeDatum {
+interface Node {
   id: number;
   name: string;
   type: string;
   mentionCount?: number;
   isHot?: boolean;
+  x?: number;
+  y?: number;
 }
 interface Edge {
   from_entity_id: number;
@@ -18,7 +20,9 @@ interface Edge {
   relation_type?: string;
   relation_desc?: string;
 }
-interface SimLink extends d3.SimulationLinkDatum<Node> {
+interface RenderLink {
+  source: Node;
+  target: Node;
   weight: number;
   relation_type?: string;
   relation_desc?: string;
@@ -58,6 +62,20 @@ const RELATION_COLOR: Record<string, string> = {
 const RELATION_TYPES_ALL = Object.keys(RELATION_COLOR);
 const ENTITY_TYPES = ["", "company", "product", "metric", "event", "sector"];
 
+// ─── DAG 컬럼 정의 (왼→오 인과 흐름) ──────────────────────────────────────────
+const DAG_COLS = [
+  { type: "event",   label: "매크로/이벤트" },
+  { type: "sector",  label: "섹터" },
+  { type: "product", label: "제품/기술" },
+  { type: "company", label: "기업" },
+  { type: "metric",  label: "지표" },
+] as const;
+const COL_SPACING = 210;
+const NODE_ROW_H  = 44;
+const HEADER_H    = 56;
+const PAD_X       = 90;
+const PAD_Y       = 24;
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function GraphPage() {
   const svgRef        = useRef<SVGSVGElement>(null);
@@ -77,7 +95,6 @@ export default function GraphPage() {
   const [search, setSearch]           = useState("");
   const [showHotOnly, setShowHotOnly] = useState(true);
   const [activeTab, setActiveTab]     = useState<"docs"|"narrative">("narrative");
-  const simulationRef = useRef<d3.Simulation<Node, SimLink> | null>(null);
 
   const loadGraph = useCallback(async () => {
     setLoading(true);
@@ -181,163 +198,244 @@ export default function GraphPage() {
     }
   }, [selectedNode, edges, loadNarrative]);
 
-  // D3 렌더링
+  // D3 렌더링 — 계층형 DAG 고정 레이아웃
   useEffect(() => {
     if (!svgRef.current || nodes.length === 0) return;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
-    const width  = svgRef.current.clientWidth  || 800;
-    const height = svgRef.current.clientHeight || 600;
+    const svgW = svgRef.current.clientWidth  || 1100;
+    const svgH = svgRef.current.clientHeight || 700;
 
     const g = svg.append("g");
     svg.call(
       d3.zoom<SVGSVGElement, unknown>()
-        .scaleExtent([0.1, 4])
+        .scaleExtent([0.15, 3])
         .on("zoom", event => g.attr("transform", event.transform))
     );
 
-    // 화살표 마커 정의 (관계 유형별)
+    // 화살표 마커 (순방향 + 역방향)
     const defs = svg.append("defs");
-    const markerTypes = [...RELATION_TYPES_ALL, "default"];
-    markerTypes.forEach(rtype => {
+    [...RELATION_TYPES_ALL, "default"].forEach(rtype => {
       const color = RELATION_COLOR[rtype] ?? "#cbd5e1";
-      defs.append("marker")
-        .attr("id", `arrow-${rtype.replace(/\s/g, "")}`)
-        .attr("viewBox", "0 -4 8 8")
-        .attr("refX", 18)
-        .attr("refY", 0)
-        .attr("markerWidth", 6)
-        .attr("markerHeight", 6)
-        .attr("orient", "auto")
-        .append("path")
-        .attr("d", "M0,-4L8,0L0,4")
-        .attr("fill", color)
-        .attr("opacity", 0.8);
+      ["", "back-"].forEach(prefix => {
+        defs.append("marker")
+          .attr("id", `arrow-${prefix}${rtype.replace(/\s/g, "")}`)
+          .attr("viewBox", "0 -4 8 8")
+          .attr("refX", 22).attr("refY", 0)
+          .attr("markerWidth", 5).attr("markerHeight", 5)
+          .attr("orient", "auto")
+          .append("path").attr("d", "M0,-4L8,0L0,4")
+          .attr("fill", color)
+          .attr("opacity", prefix ? 0.35 : 0.85);
+      });
     });
 
-    const nodeById = new Map(nodes.map(n => [n.id, n]));
+    // ── 노드 컬럼 배치 ──────────────────────────────────────────────────────
     const filteredNodes = showHotOnly ? nodes.filter(n => n.isHot) : nodes;
     const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
 
-    const simLinks: SimLink[] = edges
-      .filter(e => filteredNodeIds.has(e.from_entity_id) && filteredNodeIds.has(e.to_entity_id))
+    const colTypeIndex = new Map<string, number>(DAG_COLS.map((c, i) => [c.type, i]));
+    const colBuckets = new Map<string, Node[]>();
+    DAG_COLS.forEach(c => colBuckets.set(c.type, []));
+    filteredNodes.forEach(n => {
+      colBuckets.get(n.type)?.push(n);
+    });
+    colBuckets.forEach(bucket =>
+      bucket.sort((a, b) => (b.mentionCount ?? 0) - (a.mentionCount ?? 0))
+    );
+
+    const maxRows = Math.max(...[...colBuckets.values()].map(b => b.length), 1);
+    const dagH    = Math.max(svgH, HEADER_H + PAD_Y + maxRows * NODE_ROW_H + PAD_Y);
+
+    DAG_COLS.forEach((col, ci) => {
+      const x = PAD_X + ci * COL_SPACING;
+      const bucket = colBuckets.get(col.type) ?? [];
+      const totalH = bucket.length * NODE_ROW_H;
+      const startY = HEADER_H + PAD_Y + (dagH - HEADER_H - PAD_Y * 2 - totalH) / 2;
+      bucket.forEach((node, ri) => {
+        node.x = x;
+        node.y = startY + ri * NODE_ROW_H;
+      });
+    });
+
+    // ── 컬럼 헤더 ──────────────────────────────────────────────────────────
+    const headerG = g.append("g");
+    DAG_COLS.forEach((col, ci) => {
+      const x = PAD_X + ci * COL_SPACING;
+      const count = colBuckets.get(col.type)?.length ?? 0;
+
+      // 세로 가이드 라인
+      headerG.append("line")
+        .attr("x1", x).attr("y1", HEADER_H)
+        .attr("x2", x).attr("y2", dagH - PAD_Y)
+        .attr("stroke", TYPE_COLOR[col.type]).attr("stroke-opacity", 0.1)
+        .attr("stroke-width", 1).attr("stroke-dasharray", "4 4");
+
+      // 헤더 배경
+      headerG.append("rect")
+        .attr("x", x - 58).attr("y", 8)
+        .attr("width", 116).attr("height", 34)
+        .attr("rx", 8)
+        .attr("fill", TYPE_COLOR[col.type]).attr("opacity", 0.12);
+
+      // 컬럼명
+      headerG.append("text")
+        .attr("x", x).attr("y", 22)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "11px").attr("font-weight", "700")
+        .attr("fill", TYPE_COLOR[col.type])
+        .text(col.label);
+
+      // 노드 수
+      headerG.append("text")
+        .attr("x", x).attr("y", 36)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "9px").attr("fill", TYPE_COLOR[col.type]).attr("opacity", 0.7)
+        .text(`${count}개`);
+
+      // 컬럼 간 화살표
+      if (ci < DAG_COLS.length - 1) {
+        const nx = PAD_X + (ci + 1) * COL_SPACING;
+        headerG.append("line")
+          .attr("x1", x + 62).attr("y1", 25)
+          .attr("x2", nx - 62).attr("y2", 25)
+          .attr("stroke", "#cbd5e1").attr("stroke-width", 1.5)
+          .attr("marker-end", "url(#arrow-default)");
+      }
+    });
+
+    // ── 엣지 (베지어 곡선) ─────────────────────────────────────────────────
+    const renderLinks: RenderLink[] = edges
+      .filter(e =>
+        filteredNodeIds.has(e.from_entity_id) &&
+        filteredNodeIds.has(e.to_entity_id) &&
+        e.relation_type && e.relation_type !== "무관계"
+      )
       .map(e => ({
-        source: nodeById.get(e.from_entity_id)!,
-        target: nodeById.get(e.to_entity_id)!,
+        source: filteredNodes.find(n => n.id === e.from_entity_id)!,
+        target: filteredNodes.find(n => n.id === e.to_entity_id)!,
         weight: e.weight,
         relation_type: e.relation_type,
         relation_desc: e.relation_desc,
-      }));
+      }))
+      .filter(l => l.source?.x !== undefined && l.target?.x !== undefined);
 
-    const simulation = d3.forceSimulation<Node>(filteredNodes)
-      .force("link", d3.forceLink<Node, SimLink>(simLinks)
-        .id(d => d.id)
-        .distance(d => Math.max(100, 200 - d.weight * 3)))
-      .force("charge", d3.forceManyBody().strength(-400))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide<Node>(
-        d => Math.max(5, Math.min(18, 5 + Math.sqrt(d.mentionCount ?? 1))) + 16
-      ));
+    const linkG = g.append("g");
+    renderLinks
+      .sort((a, b) => a.weight - b.weight)
+      .forEach(d => {
+        const sx = d.source.x!, sy = d.source.y!;
+        const tx = d.target.x!, ty = d.target.y!;
+        const si = colTypeIndex.get(d.source.type) ?? 0;
+        const ti = colTypeIndex.get(d.target.type) ?? 0;
+        const color = RELATION_COLOR[d.relation_type ?? ""] ?? "#cbd5e1";
+        const mkey  = (d.relation_type ?? "default").replace(/\s/g, "");
 
-    simulationRef.current = simulation;
+        let pathD: string;
+        const isBackward = si > ti;
+        const isIntra    = si === ti;
 
-    // 엣지
-    const link = g.append("g")
-      .selectAll("line")
-      .data(simLinks)
-      .join("line")
-      .attr("stroke", d => RELATION_COLOR[d.relation_type ?? ""] ?? "#cbd5e1")
-      .attr("stroke-width", d => Math.min(d.weight * 0.3, 3.5))
-      .attr("stroke-opacity", d => d.relation_type && d.relation_type !== "무관계" ? 0.75 : 0.3)
-      .attr("marker-end", d => {
-        const key = (d.relation_type ?? "default").replace(/\s/g, "");
-        return `url(#arrow-${key})`;
-      })
+        if (isIntra) {
+          const offset = 50 + Math.abs(sy - ty) * 0.3;
+          pathD = `M${sx},${sy} C${sx + offset},${sy} ${tx + offset},${ty} ${tx},${ty}`;
+        } else {
+          const mx = (sx + tx) / 2;
+          pathD = `M${sx},${sy} C${mx},${sy} ${mx},${ty} ${tx},${ty}`;
+        }
+
+        linkG.append("path")
+          .attr("d", pathD)
+          .attr("fill", "none")
+          .attr("stroke", color)
+          .attr("stroke-width", Math.min(d.weight * 0.25, 2.5))
+          .attr("stroke-opacity", isBackward ? 0.18 : 0.55)
+          .attr("stroke-dasharray", isBackward ? "5,4" : (isIntra ? "3,2" : "none"))
+          .attr("marker-end", `url(#arrow-${isBackward ? "back-" : ""}${mkey})`)
+          .style("cursor", d.relation_desc ? "pointer" : "default")
+          .on("mousemove", (event) => {
+            if (!tooltipRef.current || !d.relation_desc) return;
+            const tip = tooltipRef.current;
+            tip.style.display = "block";
+            tip.style.left = `${event.pageX + 12}px`;
+            tip.style.top  = `${event.pageY - 28}px`;
+            tip.innerHTML =
+              `<span style="color:${color};font-weight:700">${d.relation_type ?? ""}</span><br/>${d.relation_desc}`;
+          })
+          .on("mouseleave", () => {
+            if (tooltipRef.current) tooltipRef.current.style.display = "none";
+          });
+      });
+
+    // ── 노드 ───────────────────────────────────────────────────────────────
+    const nodeG = g.append("g")
+      .selectAll<SVGGElement, Node>("g")
+      .data(filteredNodes.filter(n => n.x !== undefined))
+      .join("g")
+      .attr("transform", d => `translate(${d.x},${d.y})`)
       .style("cursor", "pointer")
       .on("mousemove", (event, d) => {
-        if (!tooltipRef.current || !d.relation_desc) return;
-        const tooltip = tooltipRef.current;
-        tooltip.style.display = "block";
-        tooltip.style.left = `${event.pageX + 12}px`;
-        tooltip.style.top  = `${event.pageY - 28}px`;
-        tooltip.innerHTML =
-          `<span class="font-semibold" style="color:${RELATION_COLOR[d.relation_type ?? ""] ?? "#94a3b8"}">${d.relation_type ?? ""}</span>` +
-          `<br/>${d.relation_desc ?? ""}`;
+        if (!tooltipRef.current) return;
+        const tip = tooltipRef.current;
+        tip.style.display = "block";
+        tip.style.left = `${event.pageX + 14}px`;
+        tip.style.top  = `${event.pageY - 32}px`;
+        const connCount = edges.filter(
+          e => e.from_entity_id === d.id || e.to_entity_id === d.id
+        ).filter(e => e.relation_type && e.relation_type !== "무관계").length;
+        tip.innerHTML =
+          `<span style="color:${TYPE_COLOR[d.type]};font-weight:700">${TYPE_LABEL[d.type] ?? d.type}</span>` +
+          `<br/><strong>${d.name}</strong>` +
+          `<br/><span style="opacity:0.7">언급 ${d.mentionCount ?? 0}회 · 관계 ${connCount}건</span>` +
+          (d.isHot ? `<br/><span style="color:#fb923c">🔥 최근 급등</span>` : "");
       })
       .on("mouseleave", () => {
         if (tooltipRef.current) tooltipRef.current.style.display = "none";
-      });
-
-    // 노드
-    const nodeG = g.append("g")
-      .selectAll<SVGGElement, Node>("g")
-      .data(filteredNodes)
-      .join("g")
-      .style("cursor", "pointer")
-      .call(
-        d3.drag<SVGGElement, Node>()
-          .on("start", (event, d) => {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x; d.fy = d.y;
-          })
-          .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
-          .on("end", (event, d) => {
-            if (!event.active) simulation.alphaTarget(0);
-            d.fx = null; d.fy = null;
-          })
-      )
+      })
       .on("click", (_, d) => handleNodeClick(d));
 
-    // 핫 노드 펄스 링
+    const nodeR = (d: Node) => Math.max(6, Math.min(18, 5 + Math.sqrt(d.mentionCount ?? 1)));
+
+    // 핫 링
     nodeG.filter(d => !!d.isHot)
       .append("circle")
-      .attr("r", d => Math.max(5, Math.min(18, 5 + Math.sqrt(d.mentionCount ?? 1))) + 6)
+      .attr("r", d => nodeR(d) + 6)
       .attr("fill", "none")
       .attr("stroke", "#fb923c")
       .attr("stroke-width", 2)
       .attr("stroke-dasharray", "4 2")
       .attr("opacity", 0.8);
 
+    // 본체
     nodeG.append("circle")
-      .attr("r", d => Math.max(5, Math.min(18, 5 + Math.sqrt(d.mentionCount ?? 1))))
+      .attr("r", nodeR)
       .attr("fill", d => TYPE_COLOR[d.type] ?? "#94a3b8")
       .attr("stroke", d => d.isHot ? "#fb923c" : "#fff")
       .attr("stroke-width", d => d.isHot ? 2.5 : 1.5)
       .attr("opacity", 0.92);
 
+    // 검색 하이라이트
+    if (search) {
+      const q = search.toLowerCase();
+      nodeG.filter(d => d.name.toLowerCase().includes(q))
+        .append("circle")
+        .attr("r", d => nodeR(d) + 5)
+        .attr("fill", "none")
+        .attr("stroke", "#1d4ed8")
+        .attr("stroke-width", 2.5);
+    }
+
+    // 레이블 (오른쪽)
     nodeG.append("text")
       .text(d => d.name)
-      .attr("x", 10)
+      .attr("x", d => nodeR(d) + 5)
       .attr("y", 4)
       .attr("font-size", "10px")
       .attr("fill", d => d.isHot ? "#ea580c" : "#475569")
       .attr("font-weight", d => d.isHot ? "600" : "normal")
       .attr("pointer-events", "none");
 
-    // 검색 하이라이트
-    if (search) {
-      const q = search.toLowerCase();
-      nodeG.select("circle:last-of-type")
-        .attr("r", d => {
-          const base = Math.max(5, Math.min(18, 5 + Math.sqrt(d.mentionCount ?? 1)));
-          return d.name.toLowerCase().includes(q) ? base + 6 : base;
-        })
-        .attr("stroke", d => d.name.toLowerCase().includes(q) ? "#1d4ed8" : (d.isHot ? "#fb923c" : "#fff"))
-        .attr("stroke-width", d => d.name.toLowerCase().includes(q) ? 3 : (d.isHot ? 2.5 : 1.5));
-    }
-
-    simulation.on("tick", () => {
-      link
-        .attr("x1", d => (d.source as Node).x!)
-        .attr("y1", d => (d.source as Node).y!)
-        .attr("x2", d => (d.target as Node).x!)
-        .attr("y2", d => (d.target as Node).y!);
-      nodeG.attr("transform", d => `translate(${d.x},${d.y})`);
-    });
-
-    return () => { simulation.stop(); };
   }, [nodes, edges, search, handleNodeClick, showHotOnly]);
 
   const hotCount = nodes.filter(n => n.isHot).length;
@@ -466,7 +564,7 @@ export default function GraphPage() {
           <svg ref={svgRef} className="w-full h-full" />
         )}
         <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 bg-white/80 px-2 py-1 rounded">
-          스크롤: 줌 · 드래그: 이동 · 노드 클릭: 분석
+          스크롤: 줌 · 드래그: 패닝 · 호버: 상세 · 클릭: 분석
         </div>
         {/* 엣지 툴팁 */}
         <div
