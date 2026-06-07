@@ -40,16 +40,16 @@ export default function Header() {
 
   const navLinks = [
     { href: "/", label: "홈" },
+    { href: "/daily-situation", label: "일자별 시황" },
     { href: "/news", label: "뉴스" },
     { href: "/reports", label: "증권 리포트" },
     { href: "/report-analysis", label: "증권 리포트 Pick" },
     { href: "/telegram", label: "텔레그램" },
     { href: "/board", label: "아카이브" },
-    { href: "/daily-situation", label: "📅 일자별 시황" },
-    { href: "/insight", label: "🔗 인사이트" },
-    { href: "/graph", label: "🕸️ 그래프" },
-    { href: "/ask", label: "🤖 Q&A" },
-    { href: "/agents", label: "🧠 에이전트" },
+    { href: "/insight", label: "인사이트" },
+    { href: "/graph", label: "그래프" },
+    { href: "/ask", label: "Q&A" },
+    { href: "/agents", label: "에이전트" },
   ] as { href: string; label: string; external?: boolean }[];
 
   return (
