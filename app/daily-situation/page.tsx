@@ -108,7 +108,7 @@ function Editor({ detail, isAdmin, onSaved }: {
   const editorRef = useRef<HTMLDivElement>(null);
   const colorRef  = useRef<HTMLInputElement>(null);
   const imgRef    = useRef<HTMLInputElement>(null);
-  const timer     = useRef<ReturnType<typeof setTimeout>>();
+  const timer     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (editorRef.current) editorRef.current.innerHTML = detail.content || "";
@@ -197,7 +197,7 @@ function Editor({ detail, isAdmin, onSaved }: {
       <div className="flex-1 px-10 py-8">
         {isAdmin ? (
           <div ref={editorRef} contentEditable suppressContentEditableWarning
-            onInput={sched} onBlur={() => { clearTimeout(timer.current); save(); }}
+            onInput={sched} onBlur={() => { if (timer.current) clearTimeout(timer.current); save(); }}
             data-placeholder="내용을 입력하세요..."
             className={`outline-none min-h-[60vh] ${CONTENT_CLS} empty:before:content-[attr(data-placeholder)] empty:before:text-slate-300 empty:before:pointer-events-none`}
           />
