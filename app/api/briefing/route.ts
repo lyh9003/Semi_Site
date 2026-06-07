@@ -10,12 +10,39 @@ async function fetchUrl(url: string) {
   return res.ok ? res.json() : [];
 }
 
+async function fetchNews() {
+  const opts = { headers: HDR, next: { revalidate: 3600 } };
+  const base = `${SUPABASE_URL}/rest/v1/news?select=title,company,date,summary,keyword`;
+
+  // 최신 날짜 확인
+  const latestRes = await fetch(`${SUPABASE_URL}/rest/v1/news?select=date&order=date.desc&limit=1`, opts);
+  if (!latestRes.ok) return [];
+  const [latest] = await latestRes.json() as { date: string }[];
+  if (!latest) return [];
+  const d = latest.date;
+
+  // 1순위: 최신일자 importance=3
+  const r3 = await fetch(`${base}&importance=eq.3&date=eq.${d}&order=date.desc&limit=10`, opts);
+  if (r3.ok) { const data = await r3.json(); if (data.length > 0) return data; }
+
+  // 2순위: 최신일자 importance=2
+  const r2 = await fetch(`${base}&importance=eq.2&date=eq.${d}&order=date.desc&limit=10`, opts);
+  if (r2.ok) { const data = await r2.json(); if (data.length > 0) return data; }
+
+  // 3순위: 전날 importance=3
+  const prevRes = await fetch(`${SUPABASE_URL}/rest/v1/news?select=date&date=lt.${d}&order=date.desc&limit=1`, opts);
+  if (!prevRes.ok) return [];
+  const [prev] = await prevRes.json() as { date: string }[];
+  if (!prev) return [];
+  const r3prev = await fetch(`${base}&importance=eq.3&date=eq.${prev.date}&order=date.desc&limit=10`, opts);
+  return r3prev.ok ? r3prev.json() : [];
+}
+
 export async function GET() {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
   const [news, reports, telegrams] = await Promise.all([
-    // 최신 날짜 + 중요도 높은 뉴스 (importance=3 우선, 날짜 내림차순)
-    fetchUrl(`${SUPABASE_URL}/rest/v1/news?select=title,company,date,summary,keyword&importance=eq.3&order=date.desc&limit=10`),
+    fetchNews(),
     // 리포트: summary 필드 사용
     fetchUrl(`${SUPABASE_URL}/rest/v1/stock_reports?select=title,securities_firm,date,summary,keyword&order=date.desc&limit=5`),
     // 최신 날짜 + 포워드 수 높은 텔레그램
