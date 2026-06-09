@@ -233,7 +233,22 @@ export default function GraphPage() {
     });
 
     // ── 노드 컬럼 배치 ──────────────────────────────────────────────────────
-    const filteredNodes = showHotOnly ? nodes.filter(n => n.isHot || n.type === "metric") : nodes;
+    const hotIds = new Set(nodes.filter(n => n.isHot).map(n => n.id));
+    const metricsLinkedToHot = new Set(
+      edges.flatMap(e => {
+        const fromIsHot = hotIds.has(e.from_entity_id);
+        const toIsHot   = hotIds.has(e.to_entity_id);
+        const fromNode  = nodes.find(n => n.id === e.from_entity_id);
+        const toNode    = nodes.find(n => n.id === e.to_entity_id);
+        const out: number[] = [];
+        if (fromIsHot && toNode?.type === "metric")   out.push(e.to_entity_id);
+        if (toIsHot   && fromNode?.type === "metric") out.push(e.from_entity_id);
+        return out;
+      })
+    );
+    const filteredNodes = showHotOnly
+      ? nodes.filter(n => n.isHot || metricsLinkedToHot.has(n.id))
+      : nodes;
     const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
 
     const colTypeIndex = new Map<string, number>(DAG_COLS.map((c, i) => [c.type, i]));
