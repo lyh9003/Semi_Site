@@ -246,8 +246,16 @@ export default function GraphPage() {
         return out;
       })
     );
+    const topMetrics = new Set(
+      [...metricsLinkedToHot]
+        .map(id => nodes.find(n => n.id === id)!)
+        .filter(Boolean)
+        .sort((a, b) => (b.mentionCount ?? 0) - (a.mentionCount ?? 0))
+        .slice(0, 8)
+        .map(n => n.id)
+    );
     const filteredNodes = showHotOnly
-      ? nodes.filter(n => n.isHot || metricsLinkedToHot.has(n.id))
+      ? nodes.filter(n => n.isHot || topMetrics.has(n.id))
       : nodes;
     const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
 
