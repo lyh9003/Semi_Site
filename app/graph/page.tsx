@@ -233,7 +233,7 @@ export default function GraphPage() {
     });
 
     // ── 노드 컬럼 배치 ──────────────────────────────────────────────────────
-    const filteredNodes = showHotOnly ? nodes.filter(n => n.isHot) : nodes;
+    const filteredNodes = showHotOnly ? nodes.filter(n => n.isHot || n.type === "metric") : nodes;
     const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
 
     const colTypeIndex = new Map<string, number>(DAG_COLS.map((c, i) => [c.type, i]));
