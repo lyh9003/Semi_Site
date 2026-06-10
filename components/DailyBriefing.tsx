@@ -14,12 +14,14 @@ const WEATHER_STYLE: Record<string, string> = {
 };
 
 export default function DailyBriefing() {
-  const [briefing, setBriefing] = useState("");
-  const [date, setDate] = useState("");
-  const [weather, setWeather] = useState<Weather | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [briefing, setBriefing]         = useState("");
+  const [date, setDate]                 = useState("");
+  const [weather, setWeather]           = useState<Weather | null>(null);
+  const [causalChains, setCausalChains] = useState<string[]>([]);
+  const [newAlerts, setNewAlerts]       = useState<string[]>([]);
+  const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError]       = useState(false);
 
   const loadBriefing = async (bust = false) => {
     const url = bust ? `/api/briefing?t=${Date.now()}` : "/api/briefing";
@@ -28,26 +30,26 @@ export default function DailyBriefing() {
     return res.json();
   };
 
+  const applyData = (data: { briefing: string; date: string; weather: Weather; causalChains?: string[]; newAlerts?: string[] }) => {
+    setBriefing(data.briefing);
+    setDate(data.date);
+    setWeather(data.weather ?? null);
+    setCausalChains(data.causalChains ?? []);
+    setNewAlerts(data.newAlerts ?? []);
+  };
+
   useEffect(() => {
     loadBriefing()
-      .then(data => { setBriefing(data.briefing); setDate(data.date); setWeather(data.weather ?? null); })
+      .then(applyData)
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    try {
-      const data = await loadBriefing(true);
-      setBriefing(data.briefing);
-      setDate(data.date);
-      setWeather(data.weather ?? null);
-      setError(false);
-    } catch {
-      setError(true);
-    } finally {
-      setRefreshing(false);
-    }
+    try { applyData(await loadBriefing(true)); setError(false); }
+    catch { setError(true); }
+    finally { setRefreshing(false); }
   };
 
   if (error && !briefing) return null;
@@ -56,22 +58,17 @@ export default function DailyBriefing() {
 
   return (
     <section className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white mb-8">
+      {/* 헤더 */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <span className="text-lg">📊</span>
         <h2 className="text-base font-bold">오늘의 반도체 시황 브리핑</h2>
-
         {weather && !loading && (
-          <span
-            title={weather.reason}
-            className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${weatherStyle} cursor-default`}
-          >
+          <span title={weather.reason}
+            className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${weatherStyle} cursor-default`}>
             {weather.emoji} {weather.label}
           </span>
         )}
-
-        {date && (
-          <span className="ml-auto text-xs text-slate-400">{date}</span>
-        )}
+        {date && <span className="ml-auto text-xs text-slate-400">{date}</span>}
       </div>
 
       {loading ? (
@@ -79,28 +76,52 @@ export default function DailyBriefing() {
           <span className="animate-spin inline-block">⚙️</span>
           AI가 오늘 시황을 분석 중입니다...
         </div>
-      ) : (
-        <div className={`text-sm text-slate-200 leading-relaxed whitespace-pre-wrap transition-opacity ${refreshing ? "opacity-40" : "opacity-100"}`}>
-          {refreshing ? (
-            <div className="flex items-center gap-2 text-slate-400">
-              <span className="animate-spin inline-block">⚙️</span>
-              브리핑을 새로 생성 중입니다...
-            </div>
-          ) : briefing}
+      ) : refreshing ? (
+        <div className="flex items-center gap-2 text-slate-400 text-sm opacity-60">
+          <span className="animate-spin inline-block">⚙️</span>
+          브리핑을 새로 생성 중입니다...
         </div>
+      ) : (
+        <>
+          {/* 신규 급등 알림 (아이디어 4) */}
+          {newAlerts.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {newAlerts.map((a, i) => (
+                <span key={i}
+                  className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                  ⚡ {a}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* 인과 흐름 (아이디어 2) */}
+          {causalChains.length > 0 && (
+            <div className="mb-4 p-3 rounded-xl bg-blue-900/30 border border-blue-500/20">
+              <p className="text-[11px] font-bold text-blue-300 mb-2 uppercase tracking-wider">🔗 인과 흐름</p>
+              <div className="space-y-1">
+                {causalChains.map((c, i) => (
+                  <p key={i} className="text-xs text-blue-100 leading-relaxed">{c}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 브리핑 본문 */}
+          <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
+            {briefing}
+          </div>
+        </>
       )}
 
       <div className="mt-4 pt-4 border-t border-slate-700 flex items-center gap-3 flex-wrap">
         <a href="/ask"
           className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg transition-colors font-medium">
-          🤖 더 자세히 물어보기
+          더 자세히 물어보기
         </a>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing || loading}
-          className="text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 px-3 py-1.5 rounded-lg transition-colors font-medium"
-        >
-          {refreshing ? "⚙️ 생성 중..." : "🔄 브리핑 새로고침"}
+        <button onClick={handleRefresh} disabled={refreshing || loading}
+          className="text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 px-3 py-1.5 rounded-lg transition-colors font-medium">
+          {refreshing ? "⚙️ 생성 중..." : "브리핑 새로고침"}
         </button>
         <span className="text-xs text-slate-500">최신 뉴스·리포트·텔레그램 기반 · AI 요약은 참고용</span>
       </div>

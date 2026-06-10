@@ -32,21 +32,86 @@ async function matchDocs(fn: string, embedding: number[], extra?: Record<string,
   return res.json();
 }
 
-// 질문이 최신 시황 관련인지 판단 (true = 최근 14일 검색, false = 전체 시맨틱 검색)
-async function isRecentQuery(openai: OpenAI, question: string): Promise<boolean> {
+interface QueryMeta { isRecent: boolean; entityNames: string[] }
+
+async function classifyQuery(openai: OpenAI, question: string): Promise<QueryMeta> {
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       {
         role: "system",
-        content: `질문이 최신 시황/동향/가격/실적 등 '지금 현재' 정보가 중요한 질문이면 "recent", 기술 설명·역사·개념 등 시간에 덜 민감한 질문이면 "general"로만 답해.`,
+        content: `반도체 시황 질문을 분석해. 두 줄로만 응답해:
+1번째 줄: 최신 정보가 중요하면 "recent", 아니면 "general"
+2번째 줄: 질문에 나온 반도체 기업·제품·지표·이벤트 이름을 쉼표로 나열. 없으면 "none"`,
       },
       { role: "user", content: question },
     ],
-    max_tokens: 5,
+    max_tokens: 60,
     temperature: 0,
   });
-  return res.choices[0].message.content?.trim().toLowerCase().startsWith("recent") ?? true;
+  const lines = (res.choices[0].message.content ?? "").trim().split("\n");
+  const isRecent = lines[0]?.trim().toLowerCase().startsWith("recent") ?? true;
+  const raw = lines[1]?.trim() ?? "none";
+  const entityNames = raw === "none" ? [] : raw.split(",").map(s => s.trim()).filter(Boolean);
+  return { isRecent, entityNames };
+}
+
+async function fetchGraphContext(entityNames: string[]): Promise<string> {
+  if (entityNames.length === 0) return "";
+  try {
+    // 엔티티 이름으로 ID 조회
+    const entRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/entities?select=id,name,type&name=in.(${entityNames.slice(0,5).join(",")})&limit=10`,
+      { headers: HDR, cache: "no-store" }
+    );
+    if (!entRes.ok) return "";
+    const ents: { id: number; name: string; type: string }[] = await entRes.json();
+    if (ents.length === 0) return "";
+    const ids = ents.map(e => e.id);
+
+    // 해당 엔티티의 relations 조회
+    const relRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/entity_relations?select=from_entity_id,to_entity_id,weight,relation_type,relation_desc&or=(from_entity_id.in.(${ids.join(",")}),to_entity_id.in.(${ids.join(",")})&weight=gte.2&order=weight.desc&limit=30`,
+      { headers: HDR, cache: "no-store" }
+    );
+    if (!relRes.ok) return "";
+    const rels: { from_entity_id: number; to_entity_id: number; weight: number; relation_type?: string; relation_desc?: string }[] = await relRes.json();
+    if (rels.length === 0) return "";
+
+    // 이웃 엔티티 ID 수집
+    const neighborIds = new Set<number>();
+    rels.forEach(r => { neighborIds.add(r.from_entity_id); neighborIds.add(r.to_entity_id); });
+    ids.forEach(id => neighborIds.delete(id));
+
+    const nbRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/entities?select=id,name,type&id=in.(${[...neighborIds].slice(0,30).join(",")})`,
+      { headers: HDR, cache: "no-store" }
+    );
+    const neighbors: { id: number; name: string; type: string }[] = nbRes.ok ? await nbRes.json() : [];
+    const nbMap = new Map([...ents, ...neighbors].map(e => [e.id, e]));
+
+    const TYPE_KO: Record<string, string> = { event:"이벤트", sector:"섹터", product:"제품/기술", company:"기업", metric:"지표" };
+
+    const lines = ["[지식 그래프 연관 정보]"];
+    for (const e of ents) {
+      const connected = rels
+        .filter(r => r.from_entity_id === e.id || r.to_entity_id === e.id)
+        .slice(0, 8)
+        .map(r => {
+          const nbId = r.from_entity_id === e.id ? r.to_entity_id : r.from_entity_id;
+          const nb = nbMap.get(nbId);
+          const rel = r.relation_desc ?? r.relation_type ?? "연관";
+          return nb ? `${nb.name}(${TYPE_KO[nb.type] ?? nb.type}) [${rel}]` : null;
+        })
+        .filter(Boolean);
+      if (connected.length > 0) {
+        lines.push(`${e.name}(${TYPE_KO[e.type] ?? e.type})의 연관: ${connected.join(", ")}`);
+      }
+    }
+    return lines.length > 1 ? lines.join("\n") : "";
+  } catch {
+    return "";
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -56,10 +121,11 @@ export async function POST(req: NextRequest) {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   // 1. 질문 분류 + 임베딩 병렬 실행
-  const [isRecent, embRes] = await Promise.all([
-    isRecentQuery(openai, question),
+  const [queryMeta, embRes] = await Promise.all([
+    classifyQuery(openai, question),
     openai.embeddings.create({ model: "text-embedding-3-small", input: question }),
   ]);
+  const { isRecent, entityNames } = queryMeta;
   const embedding = embRes.data[0].embedding;
 
   // 2. 검색 전략 분기
@@ -87,8 +153,11 @@ export async function POST(req: NextRequest) {
     .map((r, i) => r.status === "rejected" ? `[${["news","reports","telegrams"][i]}] ${r.reason}` : null)
     .filter(Boolean);
 
-  // 3. 컨텍스트 구성
+  // 3. 컨텍스트 구성 (RAG + 그래프)
+  const [graphCtx] = await Promise.all([fetchGraphContext(entityNames)]);
+
   const ctx: string[] = [];
+  if (graphCtx) ctx.push(graphCtx);
   (news as {date:string;title:string;company:string;summary:string}[]).forEach((n, i) =>
     ctx.push(`[뉴스${i+1}] (${n.date}) ${n.title}${n.company ? ` — ${n.company}` : ""}\n${n.summary}`)
   );

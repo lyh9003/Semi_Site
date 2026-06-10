@@ -8,10 +8,19 @@ const HDR = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
 const SECTION_STARTERS = ["📌", "📈", "🔍", "💡"];
 
-function toHtml(text: string, weatherEmoji: string, weatherLabel: string, weatherReason: string): string {
+function toHtml(text: string, weatherEmoji: string, weatherLabel: string, weatherReason: string, causalChains: string[] = [], newAlerts: string[] = []): string {
   const parts = [
-    `<p style="font-size:1rem;font-weight:700;margin-bottom:1.5rem">${weatherEmoji} 오늘의 시황 날씨: <strong>${weatherLabel}</strong>${weatherReason ? " — " + weatherReason : ""}</p>`,
+    `<p style="font-size:1rem;font-weight:700;margin-bottom:0.75rem">${weatherEmoji} 오늘의 시황 날씨: <strong>${weatherLabel}</strong>${weatherReason ? " — " + weatherReason : ""}</p>`,
   ];
+  if (newAlerts.length > 0) {
+    parts.push(`<div style="margin-bottom:0.75rem;display:flex;flex-wrap:wrap;gap:0.4rem">${newAlerts.map(a => `<span style="display:inline-block;font-size:0.75rem;font-weight:600;padding:0.15rem 0.6rem;border-radius:9999px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d">⚡ ${a}</span>`).join("")}</div>`);
+  }
+  if (causalChains.length > 0) {
+    parts.push(`<div style="margin-bottom:1.25rem;padding:0.75rem 1rem;background:#f0f9ff;border-left:3px solid #38bdf8;border-radius:0 6px 6px 0">`);
+    parts.push(`<p style="font-size:0.8rem;font-weight:700;color:#0369a1;margin-bottom:0.4rem">🔗 인과 흐름</p>`);
+    causalChains.forEach(c => parts.push(`<p style="font-size:0.8rem;color:#0c4a6e;margin:0.2rem 0;line-height:1.6">${c}</p>`));
+    parts.push(`</div>`);
+  }
   for (const raw of text.split("\n")) {
     const line = raw.trim().replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
     if (!line) continue;
@@ -79,13 +88,18 @@ async function fetchNews() {
 export async function GET() {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
-  const [news, reports, telegrams] = await Promise.all([
+  const origin = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000";
+
+  const [news, reports, telegrams, hotCtxRes] = await Promise.all([
     fetchNews(),
-    // 리포트: summary 필드 사용
     fetchUrl(`${SUPABASE_URL}/rest/v1/stock_reports?select=title,securities_firm,date,summary,keyword&order=date.desc&limit=5`),
-    // 최신 날짜 + 포워드 수 높은 텔레그램
     fetchUrl(`${SUPABASE_URL}/rest/v1/telegram_messages?select=channel,summary,date_utc,sentiment,keywords&order=date_utc.desc,forward_count.desc&limit=10`),
+    fetch(`${origin}/api/graph/hot-context`, { next: { revalidate: 1800 } }).then(r => r.ok ? r.json() : null).catch(() => null),
   ]);
+
+  const hotCtx = hotCtxRes as { promptText?: string; newEntries?: { name: string; type: string }[] } | null;
 
   const ctx: string[] = [];
   (news as {date:string;title:string;company:string;summary:string}[]).forEach(n =>
@@ -98,6 +112,8 @@ export async function GET() {
     ctx.push(`[텔레그램] (${t.date_utc?.slice(0,10)}) ${t.channel} [${t.sentiment ?? "중립"}]\n${t.summary}`)
   );
 
+  const graphSection = hotCtx?.promptText ? `\n\n${hotCtx.promptText}` : "";
+
   const today = new Date().toLocaleDateString("ko-KR", {
     year: "numeric", month: "long", day: "numeric", weekday: "short",
   });
@@ -109,55 +125,52 @@ export async function GET() {
       {
         role: "system",
         content: `너는 한국 반도체·주식 시황 브리핑 전문가야.
-오늘(${today}) 최신 뉴스·리포트·텔레그램을 분석해서 JSON으로 응답해.
+오늘(${today}) 최신 뉴스·리포트·텔레그램 + 지식 그래프 인과 구조를 분석해서 JSON으로 응답해.
 
 JSON 형식:
 {
-  "weather": {
-    "emoji": "<날씨 이모지>",
-    "label": "<날씨 이름>",
-    "reason": "<한 문장으로 날씨를 선택한 이유>"
-  },
+  "weather": {"emoji":"<이모지>","label":"<이름>","reason":"<한 문장>"},
+  "causal_chains": ["이벤트: A → 섹터: B → 기업: C, D → 지표: E 형태, 1~3개"],
+  "new_alerts": ["신규 급등: <엔티티명>(<타입>)" 형태, 있을 때만 포함],
   "briefing": "<브리핑 전문>"
 }
 
-날씨 기준 (반드시 아래 6개 중 하나):
-- {"emoji":"☀️","label":"맑음"} — 전반적 강세, 긍정 뉴스 우세
-- {"emoji":"🌤️","label":"구름 조금"} — 긍정적이나 일부 불확실성
-- {"emoji":"⛅","label":"흐림"} — 혼조세, 방향 불분명
-- {"emoji":"🌧️","label":"비"} — 약세, 부정적 뉴스 우세
-- {"emoji":"⛈️","label":"폭풍"} — 급락·리스크 급등
-- {"emoji":"🌫️","label":"안개"} — 극도의 불확실성
+날씨 기준 (6개 중 하나):
+☀️맑음 / 🌤️구름조금 / ⛅흐림 / 🌧️비 / ⛈️폭풍 / 🌫️안개
+
+causal_chains: 그래프 인과 클러스터 정보를 자연어로 정리. 지식 그래프에 없으면 [] 반환.
+new_alerts: 신규 급등 엔티티를 뉴스 맥락에서 해석해 주의 멘트 포함. 없으면 [] 반환.
 
 briefing 형식:
-📌 **핵심 요약** (4~5문장으로 오늘 시장의 핵심 흐름과 배경)
-📈 **주목 이슈** (중요한 이슈 5가지, 각 2~3문장으로 맥락과 의미 설명)
-🔍 **주목 키워드** (쉼표 구분, 8~12개)
-💡 **시사점** (2~3문장으로 투자자 관점의 시사점 또는 주의사항)
-
-구체적인 수치·기업명·날짜를 포함해 신뢰도 높은 브리핑을 작성해.`,
+📌 **핵심 요약** (4~5문장)
+📈 **주목 이슈** (5가지, 각 2~3문장, 그래프 인과 구조 반영)
+🔍 **주목 키워드** (8~12개)
+💡 **시사점** (2~3문장)`,
       },
       {
         role: "user",
-        content: `오늘(${today}) 자료:\n\n${ctx.join("\n\n")}`,
+        content: `오늘(${today}) 자료:\n\n${ctx.join("\n\n")}${graphSection}`,
       },
     ],
-    max_tokens: 1200,
+    max_tokens: 1400,
     temperature: 0.3,
   });
 
   const raw = JSON.parse(completion.choices[0].message.content ?? "{}");
   const briefing: string = raw.briefing ?? "";
   const weather: { emoji: string; label: string; reason: string } = raw.weather ?? { emoji: "⛅", label: "흐림", reason: "" };
+  const causalChains: string[] = Array.isArray(raw.causal_chains) ? raw.causal_chains : [];
+  const newAlerts: string[] = Array.isArray(raw.new_alerts) ? raw.new_alerts : [];
+
   const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
   const date = kst.toISOString().slice(0, 10);
   const [y, m, d] = date.split("-");
   const title = `${y}년 ${m}월 ${d}일 시황`;
 
-  const html = toHtml(briefing, weather.emoji, weather.label, weather.reason ?? "");
+  const html = toHtml(briefing, weather.emoji, weather.label, weather.reason ?? "", causalChains, newAlerts);
   await upsertDailySituation(date, title, html, weather.emoji, weather.label);
 
-  return NextResponse.json({ briefing, date, weather }, {
+  return NextResponse.json({ briefing, date, weather, causalChains, newAlerts }, {
     headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=7200" },
   });
 }
