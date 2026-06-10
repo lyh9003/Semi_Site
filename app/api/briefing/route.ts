@@ -17,7 +17,7 @@ function toHtml(text: string, weatherEmoji: string, weatherLabel: string, weathe
   }
   if (causalChains.length > 0) {
     parts.push(`<div style="margin-bottom:1.25rem;padding:0.75rem 1rem;background:#f0f9ff;border-left:3px solid #38bdf8;border-radius:0 6px 6px 0">`);
-    parts.push(`<p style="font-size:0.8rem;font-weight:700;color:#0369a1;margin-bottom:0.4rem">🔗 인과 흐름</p>`);
+    parts.push(`<p style="font-size:0.8rem;font-weight:700;color:#0369a1;margin-bottom:0.4rem">🔗 거시적 흐름</p>`);
     causalChains.forEach(c => parts.push(`<p style="font-size:0.8rem;color:#0c4a6e;margin:0.2rem 0;line-height:1.6">${c}</p>`));
     parts.push(`</div>`);
   }

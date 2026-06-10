@@ -98,7 +98,7 @@ export default function DailyBriefing() {
           {/* 인과 흐름 (아이디어 2) */}
           {causalChains.length > 0 && (
             <div className="mb-4 p-3 rounded-xl bg-blue-900/30 border border-blue-500/20">
-              <p className="text-[11px] font-bold text-blue-300 mb-2 uppercase tracking-wider">🔗 인과 흐름</p>
+              <p className="text-[11px] font-bold text-blue-300 mb-2 uppercase tracking-wider">🔗 거시적 흐름</p>
               <div className="space-y-1">
                 {causalChains.map((c, i) => (
                   <p key={i} className="text-xs text-blue-100 leading-relaxed">{c}</p>
