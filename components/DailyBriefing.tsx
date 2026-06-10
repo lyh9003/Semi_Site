@@ -83,15 +83,15 @@ export default function DailyBriefing() {
         </div>
       ) : (
         <>
-          {/* 신규 급등 알림 (아이디어 4) */}
+          {/* 최근 이슈 알림 */}
           {newAlerts.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-4">
-              {newAlerts.map((a, i) => (
-                <span key={i}
-                  className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                  ⚡ {a}
-                </span>
-              ))}
+            <div className="mb-4 p-3 rounded-xl bg-amber-400/10 border border-amber-400/20">
+              <p className="text-[11px] font-bold text-amber-300 mb-1.5 uppercase tracking-wider">⚡ 최근 이슈</p>
+              <div className="space-y-1">
+                {newAlerts.map((a, i) => (
+                  <p key={i} className="text-xs text-amber-100 leading-relaxed">{a}</p>
+                ))}
+              </div>
             </div>
           )}
 
