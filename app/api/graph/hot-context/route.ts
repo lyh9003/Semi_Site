@@ -213,7 +213,7 @@ export async function GET() {
     }
   }
   if (topNewEntries.length > 0) {
-    lines.push(`\n[신규 급등 (지난주 대비 3배+)]: ${topNewEntries.map(e => `${e.name}(${TYPE_KO[e.type] ?? e.type})`).join(", ")}`);
+    lines.push(`\n[최근 이슈 (지난주 대비 3배+)]: ${topNewEntries.map(e => `${e.name}(${TYPE_KO[e.type] ?? e.type})`).join(", ")}`);
   }
   const promptText = lines.join("\n");
 
