@@ -169,7 +169,7 @@ export async function GET() {
   for (const [id, cnt] of w4) {
     const prev = w3.get(id) ?? 0;
     const e = entityMap.get(id);
-    if (!e || cnt < 3) continue;
+    if (!e || cnt < 5) continue;
     if (cnt > prev * 3) {
       newEntries.push({ name: e.name, type: e.type, count: cnt });
     }
