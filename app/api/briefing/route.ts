@@ -102,17 +102,17 @@ export async function GET() {
   const hotCtx = hotCtxRes as { promptText?: string; newEntries?: { name: string; type: string }[] } | null;
 
   const ctx: string[] = [];
-  (news as {date:string;title:string;company:string;summary:string}[]).forEach(n =>
-    ctx.push(`[뉴스] (${n.date}) ${n.title}${n.company ? ` — ${n.company}` : ""}\n${n.summary}`)
-  );
-  (reports as {date:string;title:string;securities_firm:string;summary:string}[]).forEach(r =>
-    ctx.push(`[리포트] (${r.date}) ${r.title} — ${r.securities_firm}\n${r.summary}`)
-  );
   (telegrams as {date_utc:string;channel:string;summary:string;sentiment:string}[]).forEach(t =>
     ctx.push(`[텔레그램] (${t.date_utc?.slice(0,10)}) ${t.channel} [${t.sentiment ?? "중립"}]\n${t.summary}`)
   );
+  if (hotCtx?.promptText) ctx.push(hotCtx.promptText);
+  (reports as {date:string;title:string;securities_firm:string;summary:string}[]).forEach(r =>
+    ctx.push(`[리포트] (${r.date}) ${r.title} — ${r.securities_firm}\n${r.summary}`)
+  );
+  (news as {date:string;title:string;company:string;summary:string}[]).forEach(n =>
+    ctx.push(`[뉴스] (${n.date}) ${n.title}${n.company ? ` — ${n.company}` : ""}\n${n.summary}`)
+  );
 
-  const graphSection = hotCtx?.promptText ? `\n\n${hotCtx.promptText}` : "";
 
   const today = new Date().toLocaleDateString("ko-KR", {
     year: "numeric", month: "long", day: "numeric", weekday: "short",
@@ -149,7 +149,7 @@ briefing 형식:
       },
       {
         role: "user",
-        content: `오늘(${today}) 자료:\n\n${ctx.join("\n\n")}${graphSection}`,
+        content: `오늘(${today}) 자료:\n\n${ctx.join("\n\n")}`,
       },
     ],
     max_tokens: 1400,
