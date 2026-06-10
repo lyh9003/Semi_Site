@@ -77,28 +77,28 @@ export default function SituationTimeline() {
       {/* 주간 바 차트 */}
       <div className="space-y-3">
         {timeline.map((week, wi) => (
-          <div key={wi} className="flex items-center gap-3">
-            <span className="text-[11px] text-slate-500 w-20 flex-shrink-0 text-right">
-              {wi === timeline.length - 1 ? `이번 주` : `${timeline.length - wi - 1}주 전`}
+          <div key={wi} className="flex items-end gap-3">
+            <span className="text-[11px] text-slate-500 w-20 flex-shrink-0 text-right pb-0.5">
+              {wi === timeline.length - 1 ? "이번 주" : `${timeline.length - wi - 1}주 전`}
               <br />
               <span className="text-[10px] text-slate-400">{week.label}</span>
             </span>
-            <div className="flex-1 flex gap-0.5 h-5 items-end">
+            <div className="flex-1 flex gap-1 items-end" style={{ height: "60px" }}>
               {types.map(t => {
                 const cnt = week.counts[t] ?? 0;
-                const h = Math.round((cnt / maxVal) * 100);
+                const barH = Math.round((cnt / maxVal) * 56);
                 return (
-                  <div key={t} className="flex-1 flex flex-col items-center justify-end">
+                  <div key={t} className="flex-1 flex flex-col items-center justify-end h-full">
                     <div
                       title={`${TYPE_KO[t]}: ${cnt}`}
-                      className={`w-full rounded-t transition-all ${TYPE_COLOR[t]} ${cnt === 0 ? "opacity-10" : "opacity-90"}`}
-                      style={{ height: `${Math.max(h, cnt > 0 ? 8 : 0)}%` }}
+                      className={`w-full rounded-t ${TYPE_COLOR[t]} ${cnt === 0 ? "opacity-10" : "opacity-80"}`}
+                      style={{ height: `${Math.max(barH, cnt > 0 ? 4 : 0)}px` }}
                     />
                   </div>
                 );
               })}
             </div>
-            <span className="text-[11px] text-slate-400 w-10 flex-shrink-0">
+            <span className="text-[11px] text-slate-400 w-10 flex-shrink-0 pb-0.5">
               {Object.values(week.counts).reduce((a, b) => a + b, 0)}
             </span>
           </div>
