@@ -8,10 +8,47 @@ const HDR = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
 const SECTION_STARTERS = ["📌", "📈", "🔍", "💡"];
 
-function toHtml(text: string, weatherEmoji: string, weatherLabel: string, weatherReason: string, causalChains: string[] = [], newAlerts: string[] = []): string {
+interface StockSnapshot { name: string; price: string; change: number; }
+
+async function fetchStockSnapshot(ticker: string, name: string, isIndex = false): Promise<StockSnapshot | null> {
+  try {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5d`,
+      { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 300 } }
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const result = json.chart?.result?.[0];
+    if (!result) return null;
+    const rawPrice: number = result.meta.regularMarketPrice ?? 0;
+    const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
+    const valid = closes.filter((c): c is number => c != null && c > 0);
+    const prevClose = valid.length >= 2 ? valid[valid.length - 2] : valid[0] ?? 0;
+    const change = prevClose ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2)) : 0;
+    const price = isIndex
+      ? rawPrice.toLocaleString("ko-KR", { maximumFractionDigits: 2 })
+      : Math.round(rawPrice).toLocaleString("ko-KR");
+    return { name, price, change };
+  } catch { return null; }
+}
+
+function stockHtml(stocks: (StockSnapshot | null)[]): string {
+  const valid = stocks.filter((s): s is StockSnapshot => s !== null);
+  if (valid.length === 0) return "";
+  const items = valid.map(s => {
+    const sign = s.change >= 0 ? "+" : "";
+    const color = s.change > 0 ? "#dc2626" : s.change < 0 ? "#2563eb" : "#64748b";
+    return `<span style="white-space:nowrap"><strong>${s.name}</strong> ${s.price} <span style="color:${color}">${sign}${s.change}%</span></span>`;
+  });
+  return `<div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:0.75rem;font-size:0.82rem;color:#334155">${items.join("")}</div>`;
+}
+
+function toHtml(text: string, weatherEmoji: string, weatherLabel: string, weatherReason: string, causalChains: string[] = [], newAlerts: string[] = [], stocks: (StockSnapshot | null)[] = []): string {
   const parts = [
     `<p style="font-size:1rem;font-weight:700;margin-bottom:0.75rem">${weatherEmoji} 오늘의 시황 날씨: <strong>${weatherLabel}</strong>${weatherReason ? " — " + weatherReason : ""}</p>`,
   ];
+  const sHtml = stockHtml(stocks);
+  if (sHtml) parts.push(sHtml);
   if (newAlerts.length > 0) {
     parts.push(`<div style="margin-bottom:0.75rem;display:flex;flex-wrap:wrap;gap:0.4rem">${newAlerts.map(a => `<span style="display:inline-block;font-size:0.75rem;font-weight:600;padding:0.15rem 0.6rem;border-radius:9999px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d">⚡ ${a}</span>`).join("")}</div>`);
   }
@@ -92,12 +129,16 @@ export async function GET() {
     ? `https://${process.env.VERCEL_URL}`
     : "http://localhost:3000";
 
-  const [news, reports, telegrams, hotCtxRes] = await Promise.all([
+  const [news, reports, telegrams, hotCtxRes, kospi, samsung, hynix] = await Promise.all([
     fetchNews(),
     fetchUrl(`${SUPABASE_URL}/rest/v1/stock_reports?select=title,securities_firm,date,summary,keyword&order=date.desc&limit=5`),
     fetchUrl(`${SUPABASE_URL}/rest/v1/telegram_messages?select=channel,summary,date_utc,sentiment,keywords&order=date_utc.desc,forward_count.desc&limit=10`),
     fetch(`${origin}/api/graph/hot-context`, { next: { revalidate: 1800 } }).then(r => r.ok ? r.json() : null).catch(() => null),
+    fetchStockSnapshot("^KS11", "코스피", true),
+    fetchStockSnapshot("005930.KS", "삼성전자"),
+    fetchStockSnapshot("000660.KS", "SK하이닉스"),
   ]);
+  const stocks = [kospi, samsung, hynix];
 
   const hotCtx = hotCtxRes as { promptText?: string; newEntries?: { name: string; type: string }[] } | null;
 
@@ -167,10 +208,10 @@ briefing 형식:
   const [y, m, d] = date.split("-");
   const title = `${y}년 ${m}월 ${d}일 시황`;
 
-  const html = toHtml(briefing, weather.emoji, weather.label, weather.reason ?? "", causalChains, newAlerts);
+  const html = toHtml(briefing, weather.emoji, weather.label, weather.reason ?? "", causalChains, newAlerts, stocks);
   await upsertDailySituation(date, title, html, weather.emoji, weather.label);
 
-  return NextResponse.json({ briefing, date, weather, causalChains, newAlerts }, {
+  return NextResponse.json({ briefing, date, weather, causalChains, newAlerts, stocks }, {
     headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=7200" },
   });
 }

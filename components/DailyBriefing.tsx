@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 interface Weather { emoji: string; label: string; reason: string }
+interface StockSnapshot { name: string; price: string; change: number; }
 
 const WEATHER_STYLE: Record<string, string> = {
   "맑음":      "bg-amber-400/20 text-amber-300 border-amber-400/30",
@@ -19,6 +20,7 @@ export default function DailyBriefing() {
   const [weather, setWeather]           = useState<Weather | null>(null);
   const [causalChains, setCausalChains] = useState<string[]>([]);
   const [newAlerts, setNewAlerts]       = useState<string[]>([]);
+  const [stocks, setStocks]             = useState<(StockSnapshot | null)[]>([]);
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError]       = useState(false);
@@ -30,12 +32,13 @@ export default function DailyBriefing() {
     return res.json();
   };
 
-  const applyData = (data: { briefing: string; date: string; weather: Weather; causalChains?: string[]; newAlerts?: string[] }) => {
+  const applyData = (data: { briefing: string; date: string; weather: Weather; causalChains?: string[]; newAlerts?: string[]; stocks?: (StockSnapshot | null)[] }) => {
     setBriefing(data.briefing);
     setDate(data.date);
     setWeather(data.weather ?? null);
     setCausalChains(data.causalChains ?? []);
     setNewAlerts(data.newAlerts ?? []);
+    setStocks(data.stocks ?? []);
   };
 
   useEffect(() => {
@@ -59,7 +62,7 @@ export default function DailyBriefing() {
   return (
     <section className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white mb-8">
       {/* 헤더 */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
         <span className="text-lg">📊</span>
         <h2 className="text-base font-bold">오늘의 반도체 시황 브리핑</h2>
         {weather && !loading && (
@@ -70,6 +73,25 @@ export default function DailyBriefing() {
         )}
         {date && <span className="ml-auto text-xs text-slate-400">{date}</span>}
       </div>
+
+      {/* 주가 요약 */}
+      {stocks.filter(Boolean).length > 0 && (
+        <div className="flex flex-wrap gap-4 mb-4 text-xs text-slate-300">
+          {stocks.filter((s): s is StockSnapshot => s !== null).map(s => {
+            const up = s.change > 0;
+            const dn = s.change < 0;
+            return (
+              <span key={s.name} className="flex items-center gap-1">
+                <span className="text-slate-400">{s.name}</span>
+                <span className="font-semibold">{s.price}</span>
+                <span className={up ? "text-red-400" : dn ? "text-blue-400" : "text-slate-400"}>
+                  {up ? "▲" : dn ? "▼" : "─"}{Math.abs(s.change)}%
+                </span>
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center gap-2 text-slate-400 text-sm">
