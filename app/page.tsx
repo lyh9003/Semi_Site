@@ -8,7 +8,6 @@ import TelegramCard from "@/components/TelegramCard";
 import MemoryPriceCard from "@/components/MemoryPriceCard";
 import ChartImageSection from "@/components/ChartImageSection";
 import DailyBriefing from "@/components/DailyBriefing";
-import SectorHeatmap from "@/components/SectorHeatmap";
 
 export const revalidate = 3600; // 1시간마다 재생성
 
@@ -80,9 +79,6 @@ export default async function HomePage() {
 
       {/* 일일 시황 브리핑 */}
       <DailyBriefing />
-
-      {/* 섹터 온도계 */}
-      <SectorHeatmap />
 
       {/* 메모리 판가 */}
       {memoryPriceMsg && (
