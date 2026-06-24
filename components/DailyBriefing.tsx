@@ -25,15 +25,18 @@ export default function DailyBriefing() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError]       = useState(false);
 
+  const [isHtml, setIsHtml] = useState(false);
+
   const loadBriefing = async (bust = false) => {
-    const url = bust ? `/api/briefing?t=${Date.now()}` : "/api/briefing";
+    const url = bust ? `/api/briefing?regenerate=1&t=${Date.now()}` : "/api/briefing";
     const res = await fetch(url, bust ? { cache: "no-store" } : undefined);
     if (!res.ok) throw new Error();
     return res.json();
   };
 
-  const applyData = (data: { briefing: string; date: string; weather: Weather; causalChains?: string[]; newAlerts?: string[]; stocks?: (StockSnapshot | null)[] }) => {
-    setBriefing(data.briefing);
+  const applyData = (data: { briefing: string; htmlContent?: string; date: string; weather: Weather; causalChains?: string[]; newAlerts?: string[]; stocks?: (StockSnapshot | null)[] }) => {
+    setIsHtml(!!data.htmlContent);
+    setBriefing(data.htmlContent ?? data.briefing);
     setDate(data.date);
     setWeather(data.weather ?? null);
     setCausalChains(data.causalChains ?? []);
@@ -130,9 +133,14 @@ export default function DailyBriefing() {
           )}
 
           {/* 브리핑 본문 */}
-          <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
-            {briefing}
-          </div>
+          {isHtml ? (
+            <div className="text-sm text-slate-200 leading-relaxed [&_h2]:text-slate-100 [&_h2]:border-slate-600 [&_p]:text-slate-200"
+              dangerouslySetInnerHTML={{ __html: briefing }} />
+          ) : (
+            <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
+              {briefing}
+            </div>
+          )}
         </>
       )}
 

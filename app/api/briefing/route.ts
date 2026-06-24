@@ -122,7 +122,43 @@ async function fetchNews() {
   return r3prev.ok ? r3prev.json() : [];
 }
 
-export async function GET() {
+async function fetchStocks() {
+  const [kospi, samsung, hynix] = await Promise.all([
+    fetchStockSnapshot("^KS11", "코스피", true),
+    fetchStockSnapshot("005930.KS", "삼성전자"),
+    fetchStockSnapshot("000660.KS", "SK하이닉스"),
+  ]);
+  return [kospi, samsung, hynix];
+}
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const regenerate = searchParams.has("regenerate");
+
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const date = kst.toISOString().slice(0, 10);
+
+  // daily_situation에 오늘 데이터 있으면 즉시 반환 (OpenAI 생략)
+  if (!regenerate) {
+    const cached = await fetch(
+      `${SUPABASE_URL}/rest/v1/daily_situation?select=content,weather_emoji,weather_label&date=eq.${date}&limit=1`,
+      { headers: HDR, cache: "no-store" }
+    );
+    if (cached.ok) {
+      const rows = await cached.json() as { content: string; weather_emoji: string; weather_label: string }[];
+      if (rows[0]?.content) {
+        const stocks = await fetchStocks();
+        return NextResponse.json(
+          { briefing: "", htmlContent: rows[0].content, date,
+            weather: { emoji: rows[0].weather_emoji, label: rows[0].weather_label, reason: "" },
+            causalChains: [], newAlerts: [], stocks },
+          { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } }
+        );
+      }
+    }
+  }
+
+  // 캐시 없거나 강제 재생성 — OpenAI 호출
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
   const origin = process.env.VERCEL_URL
@@ -203,8 +239,6 @@ briefing 형식:
   const causalChains: string[] = Array.isArray(raw.causal_chains) ? raw.causal_chains : [];
   const newAlerts: string[] = Array.isArray(raw.new_alerts) ? raw.new_alerts : [];
 
-  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  const date = kst.toISOString().slice(0, 10);
   const [y, m, d] = date.split("-");
   const title = `${y}년 ${m}월 ${d}일 시황`;
 

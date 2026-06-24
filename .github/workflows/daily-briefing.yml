@@ -2,6 +2,9 @@ name: Daily Situation Briefing
 
 on:
   schedule:
+    - cron: '0 23 * * *'  # KST 08:00 (UTC 23:00)
+    - cron: '0  2 * * *'  # KST 11:00 (UTC 02:00)
+    - cron: '0  8 * * *'  # KST 17:00 (UTC 08:00)
     - cron: '0 14 * * *'  # KST 23:00 (UTC 14:00)
   workflow_dispatch:
     inputs:
