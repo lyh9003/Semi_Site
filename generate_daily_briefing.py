@@ -212,7 +212,7 @@ def upsert(date, title, content, weather_emoji, weather_label):
         "weather_label": weather_label,
     }
     r = httpx.post(
-        f"{SUPABASE_URL}/rest/v1/daily_situation",
+        f"{SUPABASE_URL}/rest/v1/daily_situation?on_conflict=date",
         headers={**HDR_SERVICE, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates"},
         json=payload,
         timeout=30

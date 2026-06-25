@@ -74,7 +74,7 @@ function toHtml(text: string, weatherEmoji: string, weatherLabel: string, weathe
 
 async function upsertDailySituation(date: string, title: string, content: string, weatherEmoji: string, weatherLabel: string) {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/daily_situation`, {
+    await fetch(`${SUPABASE_URL}/rest/v1/daily_situation?on_conflict=date`, {
       method: "POST",
       headers: {
         apikey: SERVICE_KEY,
