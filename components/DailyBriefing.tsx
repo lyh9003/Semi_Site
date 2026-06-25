@@ -5,6 +5,20 @@ import { useEffect, useState } from "react";
 interface Weather { emoji: string; label: string; reason: string }
 interface StockSnapshot { name: string; price: string; change: number; }
 
+function adaptForDark(html: string): string {
+  return html
+    .replace(/color:#0f172a/g, "color:#e2e8f0")
+    .replace(/color:#334155/g, "color:#94a3b8")
+    .replace(/color:#0369a1/g, "color:#7dd3fc")
+    .replace(/color:#0c4a6e/g, "color:#bae6fd")
+    .replace(/color:#92400e/g, "color:#fde68a")
+    .replace(/background:#f0f9ff/g, "background:rgba(30,58,138,0.35)")
+    .replace(/background:#fef3c7/g, "background:rgba(251,191,36,0.15)")
+    .replace(/border:1px solid #fcd34d/g, "border:1px solid rgba(251,191,36,0.4)")
+    .replace(/border-bottom:1px solid #e2e8f0/g, "border-bottom:1px solid #475569")
+    .replace(/border-left:3px solid #38bdf8/g, "border-left:3px solid #38bdf8");
+}
+
 const WEATHER_STYLE: Record<string, string> = {
   "맑음":      "bg-amber-400/20 text-amber-300 border-amber-400/30",
   "구름 조금": "bg-sky-400/20 text-sky-300 border-sky-400/30",
@@ -134,8 +148,8 @@ export default function DailyBriefing() {
 
           {/* 브리핑 본문 */}
           {isHtml ? (
-            <div className="text-sm text-slate-200 leading-relaxed [&_h2]:text-slate-100 [&_h2]:border-slate-600 [&_p]:text-slate-200"
-              dangerouslySetInnerHTML={{ __html: briefing }} />
+            <div className="text-sm text-slate-200 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: adaptForDark(briefing) }} />
           ) : (
             <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
               {briefing}
