@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const runtime = 'edge';
+
 const TICKERS = {
   samsung: "005930.KS",
   hynix: "000660.KS",
