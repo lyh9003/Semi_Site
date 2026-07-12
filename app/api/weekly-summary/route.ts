@@ -8,46 +8,73 @@ const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const HDR = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
-const SECTION_STARTERS = ["📌", "📈", "⚠️", "💡"];
+const SECTION_STARTERS = ["📊", "📈", "🏭", "🌐", "⚠️", "💡"];
 
 function toHtml(text: string, weatherTrend: string, weatherSummary: string, dateFrom: string, dateTo: string): string {
   const parts: string[] = [
-    `<div style="margin-bottom:1rem;padding:0.75rem 1rem;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">`,
-    `<p style="font-size:0.8rem;color:#64748b;margin-bottom:0.3rem">📅 ${dateFrom} ~ ${dateTo} 주간 반도체 시황</p>`,
-    `<p style="font-size:0.9rem;font-weight:600;color:#0f172a">${weatherTrend} ${weatherSummary}</p>`,
+    `<div style="margin-bottom:1.25rem;padding:0.75rem 1rem;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">`,
+    `<p style="font-size:0.8rem;color:#64748b;margin-bottom:0.25rem">📅 ${dateFrom} ~ ${dateTo} · 주간 반도체 시황 종합 리포트</p>`,
+    `<p style="font-size:1rem;font-weight:700;color:#0f172a">${weatherTrend}</p>`,
+    `<p style="font-size:0.85rem;color:#475569;margin-top:0.2rem">${weatherSummary}</p>`,
     `</div>`,
   ];
   for (const raw of text.split("\n")) {
     const line = raw.trim().replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
     if (!line) continue;
     if (SECTION_STARTERS.some(s => line.startsWith(s))) {
-      parts.push(`<h2 style="font-size:1.05rem;font-weight:700;color:#0f172a;margin:1.75rem 0 0.5rem;padding-bottom:0.25rem;border-bottom:1px solid #e2e8f0">${line}</h2>`);
+      parts.push(`<h2 style="font-size:1.1rem;font-weight:700;color:#0f172a;margin:2rem 0 0.6rem;padding-bottom:0.3rem;border-bottom:2px solid #e2e8f0">${line}</h2>`);
     } else if (line.startsWith("- ")) {
-      parts.push(`<p style="margin:0.3rem 0 0.3rem 1rem;line-height:1.75">• ${line.slice(2)}</p>`);
+      parts.push(`<p style="margin:0.35rem 0 0.35rem 1.2rem;line-height:1.85">• ${line.slice(2)}</p>`);
     } else {
-      parts.push(`<p style="margin:0.3rem 0;line-height:1.75">${line}</p>`);
+      parts.push(`<p style="margin:0.4rem 0;line-height:1.9;color:#1e293b">${line}</p>`);
     }
   }
   return parts.join("\n");
 }
 
+async function fetchRaw(url: string) {
+  const res = await fetch(url, { headers: HDR, cache: "no-store" });
+  return res.ok ? res.json() : [];
+}
+
 async function generate(dateFrom: string, dateTo: string): Promise<string> {
-  // 최근 7일 daily_situation 가져오기
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/daily_situation?select=date,weather_emoji,weather_label,content&date=gte.${dateFrom}&date=lte.${dateTo}&order=date.asc`,
-    { headers: HDR, cache: "no-store" }
-  );
-  const rows: { date: string; weather_emoji: string; weather_label: string; content: string }[] =
-    res.ok ? await res.json() : [];
-  if (rows.length === 0) throw new Error("no data");
+  const [dailyWeather, news, reports, telegrams] = await Promise.all([
+    fetchRaw(`${SUPABASE_URL}/rest/v1/daily_situation?select=date,weather_emoji,weather_label&date=gte.${dateFrom}&date=lte.${dateTo}&order=date.asc`),
+    fetchRaw(`${SUPABASE_URL}/rest/v1/news?select=title,company,date,summary,importance&date=gte.${dateFrom}&date=lte.${dateTo}&importance=gte.2&order=date.desc,importance.desc&limit=50`),
+    fetchRaw(`${SUPABASE_URL}/rest/v1/stock_reports?select=title,securities_firm,date,summary&date=gte.${dateFrom}&date=lte.${dateTo}&order=date.desc&limit=20`),
+    fetchRaw(`${SUPABASE_URL}/rest/v1/telegram_messages?select=channel,summary,date_utc,sentiment,forward_count&date_utc=gte.${dateFrom}T00:00:00&order=forward_count.desc,date_utc.desc&limit=40`),
+  ]);
 
-  // HTML → 텍스트 변환 (태그 제거)
-  const stripHtml = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const weatherFlow = (dailyWeather as {date:string;weather_emoji:string;weather_label:string}[])
+    .map(r => `${r.date.slice(5)}(${r.weather_emoji}${r.weather_label})`).join(" → ");
 
-  const weatherFlow = rows.map(r => r.weather_emoji).join("→");
-  const ctx = rows.map(r =>
-    `[${r.date} ${r.weather_emoji}${r.weather_label}]\n${stripHtml(r.content).slice(0, 800)}`
-  ).join("\n\n");
+  const ctxParts: string[] = [];
+
+  if ((dailyWeather as []).length > 0) {
+    ctxParts.push("[이번 주 일별 날씨 흐름]\n" +
+      (dailyWeather as {date:string;weather_emoji:string;weather_label:string}[])
+        .map(r => `${r.date} ${r.weather_emoji} ${r.weather_label}`).join("\n"));
+  }
+
+  if ((telegrams as []).length > 0) {
+    ctxParts.push("[텔레그램 주요 메시지 — 업계 반응 (공유수 높은 순)]\n" +
+      (telegrams as {date_utc:string;channel:string;sentiment:string;summary:string}[])
+        .map(t => `(${t.date_utc?.slice(0,10)}) [${t.channel}] [${t.sentiment??'중립'}] ${t.summary}`).join("\n"));
+  }
+
+  if ((reports as []).length > 0) {
+    ctxParts.push("[증권사 리포트]\n" +
+      (reports as {date:string;title:string;securities_firm:string;summary:string}[])
+        .map(r => `(${r.date}) ${r.title} — ${r.securities_firm}\n  ${r.summary}`).join("\n"));
+  }
+
+  if ((news as []).length > 0) {
+    ctxParts.push("[뉴스 — 중요도·날짜순]\n" +
+      (news as {date:string;importance:number;title:string;company:string;summary:string}[])
+        .map(n => `(${n.date}) [중요도${n.importance}] ${n.title}${n.company ? ` — ${n.company}` : ""}\n  ${n.summary}`).join("\n"));
+  }
+
+  const ctx = ctxParts.join("\n\n");
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
   const completion = await openai.chat.completions.create({
@@ -56,29 +83,45 @@ async function generate(dateFrom: string, dateTo: string): Promise<string> {
     messages: [
       {
         role: "system",
-        content: `너는 한국 반도체 시황 주간 분석가야. 최근 7일간의 일별 시황 브리핑을 종합해서 주간 요약을 작성해.
+        content: `너는 한국 반도체 시황 전문 주간 리포트 작성자야.
+${dateFrom} ~ ${dateTo} 원본 데이터(뉴스·증권사 리포트·텔레그램)를 바탕으로 깊이 있는 주간 종합 리포트를 작성해.
+일별 브리핑보다 훨씬 상세하고 길어야 하며, 구체적 기업명·수치·날짜를 적극 활용해.
 
 JSON 형식:
 {
-  "weather_trend": "날씨 이모지 흐름 (예: ⛅→🌧️→🌤️→☀️, rows에서 가져올것)",
-  "weather_summary": "날씨 트렌드 한 줄 요약 (예: '초반 불확실 후 후반 회복세')",
-  "summary": "주간 시황 전문"
+  "weather_trend": "날짜별 날씨 이모지 흐름 (예: 07/06(⛅흐림) → 07/07(🌧️비) → 07/08(🌤️구름조금))",
+  "weather_summary": "주간 날씨 트렌드 한 줄 해석",
+  "summary": "주간 리포트 전문 (아래 형식 준수, 전체 2500자 이상)"
 }
 
-summary 형식:
-📌 **이번 주 핵심 메시지** (3~4문장, 한 주를 관통하는 메인 메시지)
-📈 **주요 이슈 흐름** (3가지, 각 2~3문장, 초반→후반 변화 포함)
-⚠️ **지속 리스크** (2~3가지 불릿, 해소되지 않은 리스크)
-💡 **다음 주 주목 포인트** (2~3가지 불릿)
+summary 형식 (각 섹션 충분히 서술):
 
-리스크 민감도 원칙: 부정적 신호를 낙관적 신호보다 무게있게 다뤄. 시사점에는 하방 리스크를 반드시 포함.`,
+📊 **주간 종합 평가**
+(5~7문장. 이번 주 반도체 시장 전체를 관통하는 핵심 메시지, 시장 온도, 전주 대비 변화)
+
+📈 **이번 주 Top 5 이슈**
+(각 이슈마다 소제목 + 3~5문장. 구체적 날짜·기업·수치 포함. 초반→후반 전개 과정 서술)
+
+🏭 **섹터별 동향**
+(HBM, DRAM, NAND, 파운드리, 시스템반도체 각각 2~3문장. 공급·수요·가격 현황 포함)
+
+🌐 **지정학·매크로 영향**
+(미중 무역·관세, 환율, 글로벌 수요·재고 사이클 3~5문장)
+
+⚠️ **리스크 요인 종합**
+(이번 주 부각·지속된 리스크 3~4가지. 각 2문장씩. 하방 리스크 중심)
+
+💡 **다음 주 핵심 체크포인트**
+(구체적 일정·이벤트·실적 발표·정책 일정 포함. 3~4가지)
+
+리스크 민감도 원칙: 부정적 신호(수요 둔화·재고·가격 하락·지정학 리스크)는 낙관론보다 무게있게 다뤄.`,
       },
       {
         role: "user",
-        content: `${dateFrom} ~ ${dateTo} 7일 시황:\n\n${ctx}`,
+        content: `${dateFrom} ~ ${dateTo} 원본 데이터:\n\n${ctx}`,
       },
     ],
-    max_tokens: 1200,
+    max_tokens: 3500,
     temperature: 0.3,
   });
 
@@ -91,7 +134,6 @@ summary 형식:
     dateTo
   );
 
-  // weekly_summary 테이블에 저장
   await fetch(`${SUPABASE_URL}/rest/v1/weekly_summary`, {
     method: "POST",
     headers: {
@@ -114,14 +156,13 @@ export async function GET(req: Request) {
   const dateTo   = kst.toISOString().slice(0, 10);
   const dateFrom = new Date(Date.now() + 9 * 60 * 60 * 1000 - 6 * 86400_000).toISOString().slice(0, 10);
 
-  // 캐시: 오늘 기준 최신 weekly_summary 반환
   if (!regenerate) {
     const cached = await fetch(
       `${SUPABASE_URL}/rest/v1/weekly_summary?select=content,date_from,date_to,created_at&order=created_at.desc&limit=1`,
       { headers: HDR, cache: "no-store" }
     );
     if (cached.ok) {
-      const rows = await cached.json() as { content: string; date_from: string; date_to: string; created_at: string }[];
+      const rows = await cached.json() as { content: string; date_from: string; date_to: string }[];
       if (rows[0]?.content) {
         return NextResponse.json(
           { content: rows[0].content, dateFrom: rows[0].date_from, dateTo: rows[0].date_to, cached: true },
