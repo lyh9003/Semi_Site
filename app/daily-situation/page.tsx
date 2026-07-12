@@ -210,12 +210,14 @@ function Editor({ detail, isAdmin, onSaved }: {
 }
 
 // ── 사이드바 ────────────────────────────────────────────────────────────────
-function Sidebar({ entries, selectedDate, onSelect, sidebarOpen, onToggle }: {
+function Sidebar({ entries, selectedDate, onSelect, sidebarOpen, onToggle, onWeekly, isWeeklySelected }: {
   entries: Entry[];
   selectedDate: string | null;
   onSelect: (date: string) => void;
   sidebarOpen: boolean;
   onToggle: () => void;
+  onWeekly: () => void;
+  isWeeklySelected: boolean;
 }) {
   const entrySet = new Set(entries.map(e => e.date));
   const entryMap = new Map(entries.map(e => [e.date, e]));
@@ -259,6 +261,21 @@ function Sidebar({ entries, selectedDate, onSelect, sidebarOpen, onToggle }: {
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">일자별 시황</span>
           <button type="button" onClick={onToggle} className="md:hidden w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:bg-slate-200 text-sm">✕</button>
         </div>
+
+        {/* 최근 시황 버튼 */}
+        <button
+          type="button"
+          onClick={onWeekly}
+          className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm font-semibold border-b border-slate-200 transition-colors ${
+            isWeeklySelected
+              ? "bg-blue-50 text-blue-700"
+              : "text-slate-700 hover:bg-slate-100"
+          }`}
+        >
+          <span>📊</span>
+          <span>최근 시황</span>
+          <span className="ml-auto text-[10px] text-slate-400 font-normal">최근 7일</span>
+        </button>
 
         <nav className="flex-1 overflow-y-auto py-2">
           {tree.map(mg => {
@@ -339,12 +356,79 @@ function Sidebar({ entries, selectedDate, onSelect, sidebarOpen, onToggle }: {
   );
 }
 
+// ── 주간 요약 뷰 ──────────────────────────────────────────────────────────────
+function WeeklySummaryView() {
+  const [content, setContent]     = useState<string | null>(null);
+  const [dateFrom, setDateFrom]   = useState("");
+  const [dateTo, setDateTo]       = useState("");
+  const [loading, setLoading]     = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = async (regenerate = false) => {
+    const url = regenerate ? "/api/weekly-summary?regenerate=1" : "/api/weekly-summary";
+    const res = await fetch(url, regenerate ? { cache: "no-store" } : undefined);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    setContent(data.content ?? null);
+    setDateFrom(data.dateFrom ?? "");
+    setDateTo(data.dateTo ?? "");
+  };
+
+  useEffect(() => {
+    load().catch(() => setContent(null)).finally(() => setLoading(false));
+  }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try { await load(true); } catch { /* ignore */ }
+    finally { setRefreshing(false); }
+  };
+
+  const CONTENT_CLS_WEEKLY = `
+    text-slate-700 text-[15px] leading-7 break-words
+    [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-slate-900 [&_h2]:mt-6 [&_h2]:mb-2
+    [&_strong]:font-semibold [&_a]:text-blue-600 [&_a]:underline
+  `;
+
+  return (
+    <div className="flex flex-col min-h-full">
+      <div className="px-10 pt-10 pb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">최근 시황</h1>
+          {dateFrom && dateTo && (
+            <p className="text-sm text-slate-400 mt-1">{dateFrom} ~ {dateTo} · 7일 주간 요약</p>
+          )}
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing || loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-600 rounded-lg transition-colors font-medium"
+        >
+          {refreshing ? <span className="animate-spin inline-block text-xs">⚙️</span> : "↻"} 새로고침
+        </button>
+      </div>
+      <div className="px-10 pb-10">
+        {loading ? (
+          <div className="flex items-center gap-2 text-slate-400 text-sm py-10">
+            <span className="animate-spin inline-block">⚙️</span> 주간 요약을 불러오는 중...
+          </div>
+        ) : content ? (
+          <div className={CONTENT_CLS_WEEKLY} dangerouslySetInnerHTML={{ __html: content }} />
+        ) : (
+          <p className="text-slate-400 text-sm py-10">아직 주간 요약이 없습니다. 새로고침을 눌러 생성하세요.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── 메인 페이지 ────────────────────────────────────────────────────────────────
 export default function DailySituationPage() {
   const supabase = createClient();
   const [isAdmin, setIsAdmin] = useState(false);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [showWeekly, setShowWeekly] = useState(false);
   const [detail, setDetail] = useState<EntryDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -390,14 +474,18 @@ export default function DailySituationPage() {
 
       <Sidebar
         entries={entries}
-        selectedDate={selectedDate}
-        onSelect={date => { setSelectedDate(date); setSidebarOpen(false); }}
+        selectedDate={showWeekly ? null : selectedDate}
+        onSelect={date => { setShowWeekly(false); setSelectedDate(date); setSidebarOpen(false); }}
         sidebarOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(v => !v)}
+        onWeekly={() => { setShowWeekly(true); setSidebarOpen(false); }}
+        isWeeklySelected={showWeekly}
       />
 
       <div className="flex-1 overflow-auto min-w-0">
-        {detailLoading ? (
+        {showWeekly ? (
+          <WeeklySummaryView />
+        ) : detailLoading ? (
           <div className="flex items-center justify-center h-full text-slate-400">
             <div className="text-center">
               <div className="text-3xl mb-2 animate-spin inline-block">⚙️</div>

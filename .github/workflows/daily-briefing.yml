@@ -6,6 +6,7 @@ on:
     - cron: '0  2 * * *'  # KST 11:00 (UTC 02:00)
     - cron: '0  8 * * *'  # KST 17:00 (UTC 08:00)
     - cron: '0 14 * * *'  # KST 23:00 (UTC 14:00)
+    - cron: '30 14 * * *' # KST 23:30 (UTC 14:30) — 주간 요약
   workflow_dispatch:
     inputs:
       date:
@@ -38,8 +39,15 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           VERCEL_URL: https://semi-site.vercel.app
         run: |
-          if [ -n "${{ github.event.inputs.date }}" ]; then
-            python generate_daily_briefing.py "${{ github.event.inputs.date }}"
+          # KST 23:30 cron (UTC 14:30)이면 주간 요약만 실행
+          UTC_MINUTE=$(date -u +"%M")
+          UTC_HOUR=$(date -u +"%H")
+          if [ "$UTC_HOUR" = "14" ] && [ "$UTC_MINUTE" -ge "25" ]; then
+            python generate_weekly_summary.py
           else
-            python generate_daily_briefing.py
+            if [ -n "${{ github.event.inputs.date }}" ]; then
+              python generate_daily_briefing.py "${{ github.event.inputs.date }}"
+            else
+              python generate_daily_briefing.py
+            fi
           fi
