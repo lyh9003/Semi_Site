@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import StockChart from "@/components/StockChart";
 
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim();
 
@@ -408,6 +409,7 @@ function WeeklySummaryView() {
         </button>
       </div>
       <div className="px-10 pb-10">
+        <StockChart />
         {loading ? (
           <div className="flex items-center gap-2 text-slate-400 text-sm py-10">
             <span className="animate-spin inline-block">⚙️</span> 주간 요약을 불러오는 중...
