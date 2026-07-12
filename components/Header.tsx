@@ -12,6 +12,7 @@ export default function Header() {
   const supabase = createClient();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showExtra, setShowExtra] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -46,11 +47,14 @@ export default function Header() {
     { href: "/report-analysis", label: "증권 리포트 Pick" },
     { href: "/telegram", label: "텔레그램" },
     { href: "/board", label: "아카이브" },
-    { href: "/insight", label: "인사이트" },
-    { href: "/graph", label: "그래프" },
     { href: "/ask", label: "Q&A" },
     { href: "/agents", label: "에이전트" },
   ] as { href: string; label: string; external?: boolean }[];
+
+  const extraLinks = [
+    { href: "/insight", label: "인사이트" },
+    { href: "/graph", label: "그래프" },
+  ] as { href: string; label: string }[];
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
@@ -82,6 +86,27 @@ export default function Header() {
               {label}
             </Link>
           ))}
+          {/* 숨김 메뉴 */}
+          {showExtra && extraLinks.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                pathname === href
+                  ? "bg-blue-50 text-blue-600"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+          <button
+            onClick={() => setShowExtra(v => !v)}
+            className="px-2 py-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all text-xs font-bold"
+            title={showExtra ? "메뉴 접기" : "더 보기"}
+          >
+            {showExtra ? "◀" : "▶"}
+          </button>
         </nav>
 
         <div />
@@ -104,6 +129,23 @@ export default function Header() {
             {label}
           </Link>
         ))}
+        {showExtra && extraLinks.map(({ href, label }) => (
+          <Link
+            key={href}
+            href={href}
+            className={`flex-shrink-0 text-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              pathname === href ? "bg-blue-50 text-blue-600" : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            {label}
+          </Link>
+        ))}
+        <button
+          onClick={() => setShowExtra(v => !v)}
+          className="flex-shrink-0 px-2 py-1.5 rounded-lg text-slate-400 hover:text-slate-600 text-xs font-bold"
+        >
+          {showExtra ? "◀" : "▶"}
+        </button>
       </div>
     </header>
   );
