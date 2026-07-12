@@ -8,9 +8,9 @@ import type { BoardPost, BoardAttachment } from "@/lib/types";
 
 // 텍스트 노드의 bare URL을 <a> 태그로 변환
 function autoLinkUrls(html: string): string {
-  // 이미 href 안에 있는 URL은 건드리지 않음
+  // 속성값 안의 URL(src=, href=, data-src= 등)은 건드리지 않음
   return html.replace(
-    /(?<!href=["'])(https?:\/\/[^\s<"']+)/g,
+    /(?<!["'])(https?:\/\/[^\s<"']+)/g,
     '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:#3182ce;text-decoration:underline">$1</a>'
   );
 }
