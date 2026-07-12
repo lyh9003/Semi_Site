@@ -5,6 +5,11 @@ import { useEffect, useState } from "react";
 interface Weather { emoji: string; label: string; reason: string }
 interface StockSnapshot { name: string; price: string; change: number; }
 
+// HTML에 박힌 주가 div 제거 (JSX로 항상 최신 주가 별도 표시)
+function stripStockBlock(html: string): string {
+  return html.replace(/<div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:0\.75rem[^"]*"[^>]*>[\s\S]*?<\/div>/, "");
+}
+
 function adaptForDark(html: string): string {
   return html
     .replace(/color:#0f172a/g, "color:#e2e8f0")
@@ -91,8 +96,8 @@ export default function DailyBriefing() {
         {date && <span className="ml-auto text-xs text-slate-400">{date}</span>}
       </div>
 
-      {/* 주가 요약 — htmlContent에 이미 포함된 경우 중복 방지 */}
-      {!isHtml && stocks.filter(Boolean).length > 0 && (
+      {/* 주가 요약 — 항상 최신 데이터로 표시 (HTML 내 오래된 주가는 stripStockBlock으로 제거) */}
+      {stocks.filter(Boolean).length > 0 && (
         <div className="flex flex-wrap gap-4 mb-4 text-xs text-slate-300">
           {stocks.filter((s): s is StockSnapshot => s !== null).map(s => {
             const up = s.change > 0;
@@ -149,7 +154,7 @@ export default function DailyBriefing() {
           {/* 브리핑 본문 */}
           {isHtml ? (
             <div className="text-sm text-slate-200 leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: adaptForDark(briefing) }} />
+              dangerouslySetInnerHTML={{ __html: adaptForDark(stripStockBlock(briefing)) }} />
           ) : (
             <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
               {briefing}

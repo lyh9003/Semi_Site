@@ -23,10 +23,23 @@ async function fetchStockSnapshot(ticker: string, name: string, isIndex = false)
     const result = json.chart?.result?.[0];
     if (!result) return null;
     const rawPrice: number = result.meta.regularMarketPrice ?? 0;
+    const timestamps: number[] = result.timestamp ?? [];
     const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
-    const valid = closes.filter((c): c is number => c != null && c > 0);
-    const prevClose = valid.length >= 2 ? valid[valid.length - 2] : valid[0] ?? 0;
-    const change = prevClose ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2)) : 0;
+    const validPoints = timestamps
+      .map((ts, i) => ({ ts, close: closes[i] }))
+      .filter((p): p is { ts: number; close: number } => p.close != null && p.close > 0);
+    const kstDay = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDay(); // 0=일, 6=토
+    const isWeekend = kstDay === 0 || kstDay === 6;
+    let prevClose = 0;
+    if (!isWeekend && validPoints.length >= 1) {
+      const toKSTDate = (ts: number) => new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
+      const lastDateKST = toKSTDate(validPoints[validPoints.length - 1].ts);
+      const todayKST = toKSTDate(Date.now() / 1000);
+      prevClose = (lastDateKST === todayKST && validPoints.length >= 2)
+        ? validPoints[validPoints.length - 2].close
+        : validPoints[validPoints.length - 1].close;
+    }
+    const change = (!isWeekend && prevClose) ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2)) : 0;
     const price = isIndex
       ? rawPrice.toLocaleString("ko-KR", { maximumFractionDigits: 2 })
       : Math.round(rawPrice).toLocaleString("ko-KR");
@@ -216,6 +229,12 @@ JSON 형식:
 
 날씨 기준 (6개 중 하나):
 ☀️맑음 / 🌤️구름조금 / ⛅흐림 / 🌧️비 / ⛈️폭풍 / 🌫️안개
+
+리스크 민감도 원칙:
+- 긍정·부정 신호가 혼재할 때는 날씨를 한 단계 더 부정적으로 판단 (예: '구름조금' 대신 '흐림')
+- 수요 둔화, 재고 증가, 가격 하락, 고객사 발주 축소, 지정학 리스크 등 부정적 신호는 반드시 명시
+- briefing 핵심 요약 첫 문장에 리스크 요인을 먼저 언급
+- 시사점에는 하방 리스크 또는 투자 주의 포인트를 한 문장 이상 포함
 
 causal_chains: 그래프 인과 클러스터 정보를 자연어로 정리. 지식 그래프에 없으면 [] 반환.
 new_alerts: 최근 이슈 엔티티를 뉴스 맥락에서 해석해 주의 멘트 포함. 없으면 [] 반환.

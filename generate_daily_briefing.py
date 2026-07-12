@@ -61,9 +61,17 @@ def fetch_stock(ticker, name, is_index=False):
         if not result:
             return None
         raw_price = result["meta"].get("regularMarketPrice", 0)
-        closes = [c for c in (result.get("indicators", {}).get("quote", [{}])[0].get("close") or []) if c]
-        prev = closes[-2] if len(closes) >= 2 else (closes[0] if closes else 0)
-        change = round((raw_price - prev) / prev * 100, 2) if prev else 0
+        timestamps = result.get("timestamp") or []
+        raw_closes = (result.get("indicators", {}).get("quote", [{}])[0].get("close") or [])
+        valid_pts = [(ts, c) for ts, c in zip(timestamps, raw_closes) if c and c > 0]
+        is_weekend = datetime.now(KST).weekday() >= 5  # 5=토, 6=일
+        prev = 0
+        if not is_weekend and valid_pts:
+            today_kst = datetime.now(KST).strftime("%Y-%m-%d")
+            last_ts, last_close = valid_pts[-1]
+            last_date_kst = datetime.fromtimestamp(last_ts, tz=KST).strftime("%Y-%m-%d")
+            prev = valid_pts[-2][1] if last_date_kst == today_kst and len(valid_pts) >= 2 else last_close
+        change = round((raw_price - prev) / prev * 100, 2) if (not is_weekend and prev) else 0
         if is_index:
             price = f"{raw_price:,.2f}"
         else:
@@ -117,6 +125,12 @@ JSON 형식:
 - {{"emoji":"🌧️","label":"비"}} — 약세
 - {{"emoji":"⛈️","label":"폭풍"}} — 급락·리스크 급등
 - {{"emoji":"🌫️","label":"안개"}} — 극도의 불확실성
+
+리스크 민감도 원칙:
+- 긍정·부정 신호가 혼재할 때는 날씨를 한 단계 더 부정적으로 판단 (예: '구름 조금' 대신 '흐림')
+- 수요 둔화, 재고 증가, 가격 하락, 고객사 발주 축소, 지정학 리스크 등 부정적 신호는 반드시 명시
+- briefing 핵심 요약 첫 문장에 리스크 요인을 먼저 언급
+- 시사점에는 하방 리스크 또는 투자 주의 포인트를 한 문장 이상 포함
 
 causal_chains: 그래프 인과 클러스터 정보를 자연어로 정리. 지식 그래프에 없으면 [] 반환.
 new_alerts: 최근 이슈 엔티티를 뉴스 맥락에서 해석해 주의 멘트 포함. 없으면 [] 반환.
