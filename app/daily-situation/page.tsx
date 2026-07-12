@@ -428,7 +428,7 @@ export default function DailySituationPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [showWeekly, setShowWeekly] = useState(false);
+  const [showWeekly, setShowWeekly] = useState(true);
   const [detail, setDetail] = useState<EntryDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
