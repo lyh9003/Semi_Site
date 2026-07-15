@@ -31,7 +31,10 @@ async function fetchStockSnapshot(ticker: string, name: string, isIndex = false)
     const kstDay = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDay(); // 0=일, 6=토
     const isWeekend = kstDay === 0 || kstDay === 6;
     let prevClose = 0;
-    if (!isWeekend && validPoints.length >= 1) {
+    if (isWeekend) {
+      // 주말: 마지막 거래일(금) vs 전일(목) 비교 → 금요일 등락 표시
+      if (validPoints.length >= 2) prevClose = validPoints[validPoints.length - 2].close;
+    } else if (validPoints.length >= 1) {
       const toKSTDate = (ts: number) => new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
       const lastDateKST = toKSTDate(validPoints[validPoints.length - 1].ts);
       const todayKST = toKSTDate(Date.now() / 1000);
@@ -39,7 +42,7 @@ async function fetchStockSnapshot(ticker: string, name: string, isIndex = false)
         ? validPoints[validPoints.length - 2].close
         : validPoints[validPoints.length - 1].close;
     }
-    const change = (!isWeekend && prevClose) ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2)) : 0;
+    const change = prevClose ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2)) : 0;
     const price = isIndex
       ? rawPrice.toLocaleString("ko-KR", { maximumFractionDigits: 2 })
       : Math.round(rawPrice).toLocaleString("ko-KR");
