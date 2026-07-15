@@ -61,20 +61,8 @@ def fetch_stock(ticker, name, is_index=False):
         if not result:
             return None
         raw_price = result["meta"].get("regularMarketPrice", 0)
-        timestamps = result.get("timestamp") or []
-        raw_closes = (result.get("indicators", {}).get("quote", [{}])[0].get("close") or [])
-        valid_pts = [(ts, c) for ts, c in zip(timestamps, raw_closes) if c and c > 0]
-        is_weekend = datetime.now(KST).weekday() >= 5  # 5=토, 6=일
-        prev = 0
-        if is_weekend:
-            # 주말: 마지막 거래일(금) vs 전일(목) 비교 → 금요일 등락 표시
-            if len(valid_pts) >= 2:
-                prev = valid_pts[-2][1]
-        elif valid_pts:
-            today_kst = datetime.now(KST).strftime("%Y-%m-%d")
-            last_ts, last_close = valid_pts[-1]
-            last_date_kst = datetime.fromtimestamp(last_ts, tz=KST).strftime("%Y-%m-%d")
-            prev = valid_pts[-2][1] if last_date_kst == today_kst and len(valid_pts) >= 2 else last_close
+        # Yahoo Finance meta가 전일 종가를 직접 제공 — 복잡한 closes 배열 파싱 불필요
+        prev = result["meta"].get("chartPreviousClose") or result["meta"].get("regularMarketPreviousClose") or 0
         change = round((raw_price - prev) / prev * 100, 2) if prev else 0
         if is_index:
             price = f"{raw_price:,.2f}"

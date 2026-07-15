@@ -23,25 +23,9 @@ async function fetchStockSnapshot(ticker: string, name: string, isIndex = false)
     const result = json.chart?.result?.[0];
     if (!result) return null;
     const rawPrice: number = result.meta.regularMarketPrice ?? 0;
-    const timestamps: number[] = result.timestamp ?? [];
-    const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
-    const validPoints = timestamps
-      .map((ts, i) => ({ ts, close: closes[i] }))
-      .filter((p): p is { ts: number; close: number } => p.close != null && p.close > 0);
-    const kstDay = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDay(); // 0=일, 6=토
-    const isWeekend = kstDay === 0 || kstDay === 6;
-    let prevClose = 0;
-    if (isWeekend) {
-      // 주말: 마지막 거래일(금) vs 전일(목) 비교 → 금요일 등락 표시
-      if (validPoints.length >= 2) prevClose = validPoints[validPoints.length - 2].close;
-    } else if (validPoints.length >= 1) {
-      const toKSTDate = (ts: number) => new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
-      const lastDateKST = toKSTDate(validPoints[validPoints.length - 1].ts);
-      const todayKST = toKSTDate(Date.now() / 1000);
-      prevClose = (lastDateKST === todayKST && validPoints.length >= 2)
-        ? validPoints[validPoints.length - 2].close
-        : validPoints[validPoints.length - 1].close;
-    }
+    if (!rawPrice) return null;
+    // Yahoo Finance meta가 전일 종가를 직접 제공 — 복잡한 closes 배열 파싱 불필요
+    const prevClose: number = result.meta.chartPreviousClose ?? result.meta.regularMarketPreviousClose ?? 0;
     const change = prevClose ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2)) : 0;
     const price = isIndex
       ? rawPrice.toLocaleString("ko-KR", { maximumFractionDigits: 2 })

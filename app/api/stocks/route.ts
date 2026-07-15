@@ -36,40 +36,19 @@ async function fetchStock(ticker: string, range: Range) {
     }))
     .filter((d) => d.price !== null);
 
-  // 유효한 (timestamp, close) 쌍만 추출
-  const validPoints = timestamps
-    .map((ts, i) => ({ ts, close: closes[i] }))
-    .filter((p): p is { ts: number; close: number } => p.close != null && p.close > 0);
-
   const rawPrice: number = meta.regularMarketPrice ?? 0;
   const currentPrice: number = Math.round(rawPrice);
 
-  // KST 기준 날짜 비교 (한국 주식 1일봉 timestamp = KST 자정 = UTC 전날 15:00)
-  const toKSTDate = (ts: number) =>
-    new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
-
-  const kstDay = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDay(); // 0=일, 6=토
-  const isWeekend = kstDay === 0 || kstDay === 6;
-  let prevClose = 0;
-  if (isWeekend) {
-    // 주말: 마지막 거래일(금) vs 전일(목) 비교 → 금요일 등락 표시
-    if (validPoints.length >= 2) prevClose = validPoints[validPoints.length - 2].close;
-  } else if (validPoints.length >= 1) {
-    const lastTs = validPoints[validPoints.length - 1].ts;
-    const lastDateKST = toKSTDate(lastTs);
-    const todayKST = toKSTDate(Date.now() / 1000);
-    if (lastDateKST === todayKST && validPoints.length >= 2) {
-      prevClose = validPoints[validPoints.length - 2].close;
-    } else {
-      prevClose = validPoints[validPoints.length - 1].close;
-    }
-  }
-
+  // Yahoo Finance meta가 전일 종가를 직접 제공
+  const prevClose: number = meta.chartPreviousClose ?? meta.regularMarketPreviousClose ?? 0;
   const change = prevClose
     ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
     : 0;
 
-  // 마지막 거래일 날짜 (일자만, KST 기준)
+  // 유효한 close 포인트에서 마지막 날짜 추출
+  const validPoints = timestamps
+    .map((ts, i) => ({ ts, close: closes[i] }))
+    .filter((p): p is { ts: number; close: number } => p.close != null && p.close > 0);
   const lastValidTs = validPoints.length > 0 ? validPoints[validPoints.length - 1].ts : null;
   const priceDate = lastValidTs
     ? new Date(lastValidTs * 1000).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" })
