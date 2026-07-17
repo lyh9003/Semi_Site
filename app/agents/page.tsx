@@ -158,7 +158,7 @@ export default function AgentsPage() {
             {status === "connected" ? "실시간 연결" :
              status === "connecting" ? "연결 중..." : "연결 끊김"}
           </div>
-          <p className="text-gray-700">Qwen2.5:3b · Ollama</p>
+          <p className="text-gray-700">Gemini 2.0 Flash Lite</p>
         </div>
       </aside>
 
