@@ -149,7 +149,7 @@ async def fetch_market_data() -> Dict[str, List[str]]:
 
             # ① 뉴스 30건 → 항목별 문자열 리스트
             r = await client.get(f"{base}/news", headers=headers, params={
-                "select": "title,company,summary,content,keyword,date,importance",
+                "select": "title,company,summary,keyword,date,importance",
                 "order": "date.desc,importance.desc",
                 "limit": "30",
             })
