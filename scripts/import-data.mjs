@@ -70,9 +70,11 @@ async function importNews() {
   for (let i = 1; i < allRows.length; i++) {
     const values = allRows[i];
     if (values.length < 2) continue;
+    const dateVal = values[0];
+    if (!dateVal || dateVal < "2026-01-01") continue; // pre-2026 제외
     const importanceRaw = values[9];
     rows.push({
-      date: values[0] || null,
+      date: dateVal,
       title: values[1] || null,
       company: values[2] || null,
       link: values[3] || null,
@@ -161,6 +163,8 @@ async function importTelegram() {
     if (values.length < 2) continue;
     const normalized = col(values, "normalized_text");
     if (!normalized) continue;
+    const dateUtcVal = col(values, "date_utc");
+    if (!dateUtcVal || dateUtcVal < "2026-01-01") continue; // pre-2026 제외
     rows.push({
       channel: col(values, "channel"),
       sender_id: col(values, "sender_id"),
