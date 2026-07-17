@@ -24,8 +24,33 @@ async function fetchStockSnapshot(ticker: string, name: string, isIndex = false)
     if (!result) return null;
     const rawPrice: number = result.meta.regularMarketPrice ?? 0;
     if (!rawPrice) return null;
-    // Yahoo Finance meta가 전일 종가를 직접 제공 — 복잡한 closes 배열 파싱 불필요
-    const prevClose: number = result.meta.chartPreviousClose ?? result.meta.regularMarketPreviousClose ?? 0;
+
+    const timestamps: number[] = result.timestamp ?? [];
+    const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
+    const validPoints = timestamps
+      .map((ts, i) => ({ ts, close: closes[i] }))
+      .filter((p): p is { ts: number; close: number } => p.close != null && p.close > 0);
+
+    const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const isWeekend = kstNow.getUTCDay() === 0 || kstNow.getUTCDay() === 6;
+    const todayKST = kstNow.toISOString().slice(0, 10);
+    const toKSTDate = (ts: number) =>
+      new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
+
+    let prevClose = 0;
+    if (validPoints.length >= 2) {
+      if (isWeekend) {
+        // 주말: 금요일 종가 변동률 표시 (목→금)
+        prevClose = validPoints[validPoints.length - 2].close;
+      } else {
+        const lastDate = toKSTDate(validPoints[validPoints.length - 1].ts);
+        // 오늘 종가가 배열에 포함된 경우 → 직전 항목이 어제 종가
+        // 오늘 종가가 미포함(장중 null)인 경우 → 마지막 항목이 어제 종가
+        prevClose = (lastDate === todayKST)
+          ? validPoints[validPoints.length - 2].close
+          : validPoints[validPoints.length - 1].close;
+      }
+    }
     const change = prevClose ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2)) : 0;
     const price = isIndex
       ? rawPrice.toLocaleString("ko-KR", { maximumFractionDigits: 2 })

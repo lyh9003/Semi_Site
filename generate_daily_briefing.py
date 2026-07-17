@@ -61,8 +61,18 @@ def fetch_stock(ticker, name, is_index=False):
         if not result:
             return None
         raw_price = result["meta"].get("regularMarketPrice", 0)
-        # Yahoo Finance meta가 전일 종가를 직접 제공 — 복잡한 closes 배열 파싱 불필요
-        prev = result["meta"].get("chartPreviousClose") or result["meta"].get("regularMarketPreviousClose") or 0
+        timestamps = result.get("timestamp") or []
+        raw_closes = (result.get("indicators", {}).get("quote", [{}])[0].get("close") or [])
+        valid_pts = [(ts, c) for ts, c in zip(timestamps, raw_closes) if c and c > 0]
+        is_weekend = datetime.now(KST).weekday() >= 5
+        prev = 0
+        if len(valid_pts) >= 2:
+            if is_weekend:
+                prev = valid_pts[-2][1]
+            else:
+                today_kst = datetime.now(KST).strftime("%Y-%m-%d")
+                last_date = datetime.fromtimestamp(valid_pts[-1][0], tz=KST).strftime("%Y-%m-%d")
+                prev = valid_pts[-2][1] if last_date == today_kst else valid_pts[-1][1]
         change = round((raw_price - prev) / prev * 100, 2) if prev else 0
         if is_index:
             price = f"{raw_price:,.2f}"
