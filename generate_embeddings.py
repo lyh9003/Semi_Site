@@ -37,7 +37,7 @@ if not SUPABASE_URL or not WRITE_KEY:
 if not OPENAI_KEY:
     print("❌ OPENAI_API_KEY 없음"); sys.exit(1)
 
-READ_HDR = {"apikey": ANON_KEY, "Authorization": f"Bearer {ANON_KEY}"}
+READ_HDR = {"apikey": WRITE_KEY, "Authorization": f"Bearer {WRITE_KEY}"}
 WRITE_HDR = {
     "apikey": WRITE_KEY, "Authorization": f"Bearer {WRITE_KEY}",
     "Content-Type": "application/json", "Prefer": "return=minimal",
