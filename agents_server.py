@@ -1,7 +1,7 @@
 """
 에이전트 시황 채팅 서버
 - FastAPI WebSocket 서버 (포트 8765)
-- 10개 에이전트가 Qwen2.5:3b (Ollama)로 실시간 시황 토론
+- 5개 에이전트가 Gemini 2.0 Flash Lite로 실시간 시황 토론
 - Supabase에서 뉴스·텔레그램·증권리포트 데이터 자동 갱신 (5분마다)
 """
 
@@ -40,8 +40,9 @@ load_env(os.path.join(os.path.dirname(__file__), ".env.local"))
 
 SUPABASE_URL  = os.getenv("NEXT_PUBLIC_SUPABASE_URL",  "https://zpfcxfzxqpprtcjmzosc.supabase.co")
 SUPABASE_KEY  = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
-OLLAMA_URL    = os.getenv("OLLAMA_URL",   "http://localhost:11434")
-OLLAMA_MODEL  = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL  = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
+GEMINI_URL    = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 # ── 에이전트 페르소나 10개 (개성·말투·관심분야 강화) ─────────────────────────
 AGENTS = [
@@ -288,7 +289,7 @@ MODE_INSTRUCTIONS = {
 }
 
 
-# ── Ollama 메시지 생성 ───────────────────────────────────────────────────────
+# ── Gemini 메시지 생성 ──────────────────────────────────────────────────────
 async def generate_message(agent: Dict, data: Dict[str, List[str]], history: List[Dict]) -> str:
     recent = history[-6:] if len(history) >= 6 else history
 
@@ -300,15 +301,12 @@ async def generate_message(agent: Dict, data: Dict[str, List[str]], history: Lis
         f"{m['emoji']}{m['name']}: {m['message']}" for m in recent
     ) if recent else "(대화 시작)"
 
-    # 에이전트 관심 분야에서 항목 1개 커서로 순환
     cat, item = pick_one_item(agent, data)
     cat_label = {"news": "뉴스", "telegram": "텔레그램", "reports": "증권리포트", "analysis": "산업분석"}.get(cat, cat)
 
-    # 대화 모드 선택
     mode        = pick_agent_mode(agent)
     instruction = MODE_INSTRUCTIONS[mode].format(speaker=last_speaker, last=last_text[:60])
 
-    # 호명할 상대 랜덤 선택
     others = [a["name"] for a in AGENTS if a["id"] != agent["id"]]
     target = random.choice(others)
 
@@ -323,8 +321,7 @@ async def generate_message(agent: Dict, data: Dict[str, List[str]], history: Lis
         f"1. 반드시 한국어 존댓말만 사용 (반말·중국어·영어 금지)\n"
         f"2. 1~2문장, 자연스러운 존댓말 채팅체 (예: ~요, ~죠, ~세요, ~습니다)\n"
         f"3. 자기 이름 출력 금지\n"
-        f"4. 가끔 '{target}'를 직접 불러도 됨\n"
-        f"답변:"
+        f"4. 가끔 '{target}'를 직접 불러도 됨"
     )
 
     def has_cjk(text: str) -> bool:
@@ -332,35 +329,38 @@ async def generate_message(agent: Dict, data: Dict[str, List[str]], history: Lis
 
     for attempt in range(2):
         try:
-            async with httpx.AsyncClient(timeout=35) as client:
+            async with httpx.AsyncClient(timeout=30) as client:
                 r = await client.post(
-                    f"{OLLAMA_URL}/api/generate",
+                    f"{GEMINI_URL}?key={GEMINI_API_KEY}",
                     json={
-                        "model": OLLAMA_MODEL,
-                        "prompt": prompt,
-                        "stream": False,
-                        "options": {
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {
                             "temperature": 0.85 + attempt * 0.05,
-                            "top_p": 0.9,
-                            "num_predict": 200,
-                            "stop": ["\n\n", "규칙:", "최근 대화:", "방금 읽은"],
+                            "topP": 0.9,
+                            "maxOutputTokens": 200,
+                            "stopSequences": ["\n\n", "규칙:", "최근 대화:", "방금 읽은"],
                         },
                     },
                 )
                 if r.status_code == 200:
-                    text = r.json().get("response", "").strip()
-                    text = re.sub(r"^답변[:：]?\s*", "", text).strip()
+                    candidates = r.json().get("candidates", [])
+                    if not candidates:
+                        print(f"  [Gemini] 응답 없음")
+                        continue
+                    text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
                     text = re.sub(rf"^{re.escape(agent['name'])}[:：]\s*", "", text).strip()
                     lines = [l.strip() for l in text.split("\n") if l.strip()]
                     result = " ".join(lines[:2])
                     if result and not has_cjk(result):
                         return result
                     print(f"  [재시도] 한자 감지: {result[:30]}")
+                else:
+                    print(f"  [Gemini 오류] {r.status_code}: {r.text[:100]}")
         except httpx.TimeoutException:
-            print(f"  [타임아웃] {agent['name']} 35초 초과 → 건너뜀")
+            print(f"  [타임아웃] {agent['name']} 30초 초과 → 건너뜀")
             return ""
         except Exception as e:
-            print(f"[Ollama 오류] {e}")
+            print(f"[Gemini 오류] {e}")
     return ""
 
 
@@ -400,7 +400,7 @@ async def health():
         "status": "ok",
         "agents": len(AGENTS),
         "history": len(chat_history),
-        "model": OLLAMA_MODEL,
+        "model": GEMINI_MODEL,
         "clients": len(manager.connections),
     }
 
@@ -410,7 +410,7 @@ async def agent_loop():
     global market_data
     tick = 0
 
-    print(f"[시작] 모델={OLLAMA_MODEL} | 포트=8765")
+    print(f"[시작] 모델={GEMINI_MODEL} | 포트=8765")
     market_data = await fetch_market_data()
 
     # 오프닝 시스템 메시지
