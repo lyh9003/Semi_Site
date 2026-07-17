@@ -3,17 +3,18 @@ import { NextResponse } from "next/server";
 export const runtime = 'edge';
 
 const TICKERS = {
+  kospi:   "^KS11",
   samsung: "005930.KS",
-  hynix: "000660.KS",
+  hynix:   "000660.KS",
 };
 
 const VALID_RANGES = ["1mo", "1y", "2y"] as const;
 type Range = typeof VALID_RANGES[number];
 
-async function fetchStock(ticker: string, range: Range) {
+async function fetchStock(ticker: string, range: Range, isIndex = false) {
   const interval = range === "1mo" ? "1d" : "1wk";
   const res = await fetch(
-    `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=${interval}&range=${range}`,
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=${interval}&range=${range}`,
     { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 300 } }
   );
   if (!res.ok) throw new Error(`Failed to fetch ${ticker}`);
@@ -32,12 +33,12 @@ async function fetchStock(ticker: string, range: Range) {
   const history = timestamps
     .map((ts, i) => ({
       date: new Date(ts * 1000).toLocaleDateString("ko-KR", { ...dateOptions, timeZone: "Asia/Seoul" }),
-      price: closes[i] ? Math.round(closes[i]!) : null,
+      price: closes[i] ? (isIndex ? parseFloat(closes[i]!.toFixed(2)) : Math.round(closes[i]!)) : null,
     }))
     .filter((d) => d.price !== null);
 
   const rawPrice: number = meta.regularMarketPrice ?? 0;
-  const currentPrice: number = Math.round(rawPrice);
+  const currentPrice: number = isIndex ? parseFloat(rawPrice.toFixed(2)) : Math.round(rawPrice);
 
   // 유효한 (timestamp, close) 쌍 추출
   const validPoints = timestamps
@@ -68,7 +69,7 @@ async function fetchStock(ticker: string, range: Range) {
   const priceDate = lastValidTs
     ? new Date(lastValidTs * 1000).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" })
     : null;
-  return { history, currentPrice, change, currency: meta.currency ?? "KRW", priceDate };
+  return { history, currentPrice, change, currency: meta.currency ?? "KRW", priceDate, isIndex };
 }
 
 export async function GET(req: Request) {
@@ -76,11 +77,12 @@ export async function GET(req: Request) {
   const rangeParam = searchParams.get("range") ?? "1mo";
   const range: Range = VALID_RANGES.includes(rangeParam as Range) ? (rangeParam as Range) : "1mo";
   try {
-    const [samsung, hynix] = await Promise.all([
+    const [kospi, samsung, hynix] = await Promise.all([
+      fetchStock(TICKERS.kospi, range, true),
       fetchStock(TICKERS.samsung, range),
       fetchStock(TICKERS.hynix, range),
     ]);
-    return NextResponse.json({ samsung, hynix });
+    return NextResponse.json({ kospi, samsung, hynix });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

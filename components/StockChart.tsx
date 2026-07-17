@@ -13,21 +13,24 @@ interface StockData {
   currentPrice: number;
   change: number;
   priceDate?: string | null;
+  isIndex?: boolean;
 }
 
 interface StocksResponse {
+  kospi: StockData;
   samsung: StockData;
   hynix: StockData;
 }
 
 function PriceBadge({ name, data }: { name: string; data: StockData }) {
   const up = data.change >= 0;
+  const priceStr = data.isIndex
+    ? data.currentPrice.toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : data.currentPrice.toLocaleString() + "원";
   return (
     <div className="flex items-center gap-3">
       <span className="text-sm font-semibold text-slate-700">{name}</span>
-      <span className="text-base font-bold text-slate-900">
-        {data.currentPrice.toLocaleString()}원
-      </span>
+      <span className="text-base font-bold text-slate-900">{priceStr}</span>
       <span className={`text-sm font-semibold ${up ? "text-red-500" : "text-blue-500"}`}>
         {up ? "▲" : "▼"} {Math.abs(data.change)}%
       </span>
@@ -81,6 +84,7 @@ export default function StockChart() {
           </h2>
           {data ? (
             <div className="flex flex-wrap gap-x-5 gap-y-1">
+              <PriceBadge name="코스피" data={data.kospi} />
               <PriceBadge name="삼성전자" data={data.samsung} />
               <PriceBadge name="SK하이닉스" data={data.hynix} />
             </div>
