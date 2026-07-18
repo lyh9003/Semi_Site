@@ -4,8 +4,9 @@ import OpenAI from "openai";
 export const maxDuration = 30;
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const HDR = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+// 서버사이드 RPC는 service_role 사용 → anon 3s timeout 우회
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const HDR = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` };
 
 const SYSTEM = `너는 한국 반도체·주식 시황 전문가 AI야.
 제공된 최신 뉴스·증권리포트·텔레그램 정보를 바탕으로 질문에 답변해.
