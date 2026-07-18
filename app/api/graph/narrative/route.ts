@@ -1,8 +1,6 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
-
 interface RelEdge {
   neighborName: string;
   neighborType: string;
@@ -53,6 +51,7 @@ ${relLines}
 - 투자·산업 관점에서 핵심 의미 포함
 - 한국어로`;
 
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
