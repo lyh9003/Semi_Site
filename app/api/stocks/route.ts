@@ -69,7 +69,7 @@ async function fetchStock(ticker: string, range: Range, isIndex = false) {
   const priceDate = lastValidTs
     ? new Date(lastValidTs * 1000).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" })
     : null;
-  return { history, currentPrice, change, currency: meta.currency ?? "KRW", priceDate, isIndex };
+  return { history, currentPrice, change, currency: meta.currency ?? "KRW", priceDate, isIndex, isMarketClosed: isWeekend };
 }
 
 export async function GET(req: Request) {

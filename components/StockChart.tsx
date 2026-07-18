@@ -14,6 +14,7 @@ interface StockData {
   change: number;
   priceDate?: string | null;
   isIndex?: boolean;
+  isMarketClosed?: boolean;
 }
 
 interface StocksResponse {
@@ -31,9 +32,13 @@ function PriceBadge({ name, data }: { name: string; data: StockData }) {
     <div className="flex items-center gap-3">
       <span className="text-sm font-semibold text-slate-700">{name}</span>
       <span className="text-base font-bold text-slate-900">{priceStr}</span>
-      <span className={`text-sm font-semibold ${up ? "text-red-500" : "text-blue-500"}`}>
-        {up ? "▲" : "▼"} {Math.abs(data.change)}%
-      </span>
+      {data.isMarketClosed ? (
+        <span className="text-sm text-slate-400">휴장</span>
+      ) : (
+        <span className={`text-sm font-semibold ${up ? "text-red-500" : "text-blue-500"}`}>
+          {up ? "▲" : "▼"} {Math.abs(data.change)}%
+        </span>
+      )}
     </div>
   );
 }
