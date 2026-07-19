@@ -98,18 +98,18 @@ export default function DailyBriefing() {
 
       {/* 주가 요약 — 항상 최신 데이터로 표시 (HTML 내 오래된 주가는 stripStockBlock으로 제거) */}
       {stocks.filter(Boolean).length > 0 && (
-        <div className="flex flex-wrap gap-4 mb-4 text-xs text-slate-300">
+        <div className="flex flex-wrap gap-x-5 gap-y-1 mb-4">
           {stocks.filter((s): s is StockSnapshot => s !== null).map(s => {
             const up = s.change > 0;
             const dn = s.change < 0;
             return (
-              <span key={s.name} className="flex items-center gap-1">
-                <span className="text-slate-400">{s.name}</span>
-                <span className="font-semibold">{s.price}</span>
-                <span className={up ? "text-red-400" : dn ? "text-blue-400" : "text-slate-400"}>
-                  {up ? "▲" : dn ? "▼" : "─"}{Math.abs(s.change)}%
+              <div key={s.name} className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-slate-300">{s.name}</span>
+                <span className="text-base font-bold text-white">{s.price}</span>
+                <span className={`text-sm font-semibold ${up ? "text-red-400" : dn ? "text-blue-400" : "text-slate-400"}`}>
+                  {up ? "▲" : dn ? "▼" : "─"} {Math.abs(s.change)}%
                 </span>
-              </span>
+              </div>
             );
           })}
         </div>
