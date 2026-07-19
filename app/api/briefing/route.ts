@@ -10,7 +10,7 @@ const HDR = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 
 const SECTION_STARTERS = ["📌", "📈", "🔍", "💡"];
 
-interface StockSnapshot { name: string; price: string; change: number; }
+interface StockSnapshot { name: string; price: string; change: number; isMarketClosed?: boolean; }
 
 async function fetchStockSnapshot(ticker: string, name: string, isIndex = false): Promise<StockSnapshot | null> {
   try {
@@ -55,7 +55,7 @@ async function fetchStockSnapshot(ticker: string, name: string, isIndex = false)
     const price = isIndex
       ? rawPrice.toLocaleString("ko-KR", { maximumFractionDigits: 2 })
       : Math.round(rawPrice).toLocaleString("ko-KR");
-    return { name, price, change };
+    return { name, price, change, isMarketClosed: isWeekend };
   } catch { return null; }
 }
 

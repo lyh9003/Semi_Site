@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 interface Weather { emoji: string; label: string; reason: string }
-interface StockSnapshot { name: string; price: string; change: number; }
+interface StockSnapshot { name: string; price: string; change: number; isMarketClosed?: boolean; }
 
 // HTML에 박힌 주가 div 제거 (JSX로 항상 최신 주가 별도 표시)
 function stripStockBlock(html: string): string {
@@ -106,9 +106,13 @@ export default function DailyBriefing() {
               <div key={s.name} className="flex items-center gap-3">
                 <span className="text-sm font-semibold text-slate-300">{s.name}</span>
                 <span className="text-base font-bold text-white">{s.price}</span>
-                <span className={`text-sm font-semibold ${up ? "text-red-400" : dn ? "text-blue-400" : "text-slate-400"}`}>
-                  {up ? "▲" : dn ? "▼" : "─"} {Math.abs(s.change)}%
-                </span>
+                {s.isMarketClosed ? (
+                  <span className="text-sm text-slate-400">휴장</span>
+                ) : (
+                  <span className={`text-sm font-semibold ${up ? "text-red-400" : dn ? "text-blue-400" : "text-slate-400"}`}>
+                    {up ? "▲" : dn ? "▼" : "─"} {Math.abs(s.change)}%
+                  </span>
+                )}
               </div>
             );
           })}
