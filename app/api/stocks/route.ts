@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isKRMarketClosed } from "@/lib/holidays";
 
 export const runtime = 'edge';
 
@@ -46,14 +47,14 @@ async function fetchStock(ticker: string, range: Range, isIndex = false) {
     .filter((p): p is { ts: number; close: number } => p.close != null && p.close > 0);
 
   const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  const isWeekend = kstNow.getUTCDay() === 0 || kstNow.getUTCDay() === 6;
   const todayKST = kstNow.toISOString().slice(0, 10);
+  const isMarketClosed = isKRMarketClosed(todayKST);
   const toKSTDate = (ts: number) =>
     new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
 
   let prevClose = 0;
   if (validPoints.length >= 2) {
-    if (isWeekend) {
+    if (isMarketClosed) {
       prevClose = validPoints[validPoints.length - 2].close;
     } else {
       const lastDate = toKSTDate(validPoints[validPoints.length - 1].ts);
@@ -69,7 +70,7 @@ async function fetchStock(ticker: string, range: Range, isIndex = false) {
   const priceDate = lastValidTs
     ? new Date(lastValidTs * 1000).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" })
     : null;
-  return { history, currentPrice, change, currency: meta.currency ?? "KRW", priceDate, isIndex, isMarketClosed: isWeekend };
+  return { history, currentPrice, change, currency: meta.currency ?? "KRW", priceDate, isIndex, isMarketClosed };
 }
 
 export async function GET(req: Request) {

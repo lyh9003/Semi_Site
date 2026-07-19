@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { isKRMarketClosed } from "@/lib/holidays";
 
 export const runtime = 'edge';
 
@@ -32,15 +33,15 @@ async function fetchStockSnapshot(ticker: string, name: string, isIndex = false)
       .filter((p): p is { ts: number; close: number } => p.close != null && p.close > 0);
 
     const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
-    const isWeekend = kstNow.getUTCDay() === 0 || kstNow.getUTCDay() === 6;
     const todayKST = kstNow.toISOString().slice(0, 10);
+    const isMarketClosed = isKRMarketClosed(todayKST);
     const toKSTDate = (ts: number) =>
       new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
 
     let prevClose = 0;
     if (validPoints.length >= 2) {
-      if (isWeekend) {
-        // 주말: 금요일 종가 변동률 표시 (목→금)
+      if (isMarketClosed) {
+        // 휴장일: 직전 거래일 대비 변동률
         prevClose = validPoints[validPoints.length - 2].close;
       } else {
         const lastDate = toKSTDate(validPoints[validPoints.length - 1].ts);
@@ -55,7 +56,7 @@ async function fetchStockSnapshot(ticker: string, name: string, isIndex = false)
     const price = isIndex
       ? rawPrice.toLocaleString("ko-KR", { maximumFractionDigits: 2 })
       : Math.round(rawPrice).toLocaleString("ko-KR");
-    return { name, price, change, isMarketClosed: isWeekend };
+    return { name, price, change, isMarketClosed };
   } catch { return null; }
 }
 
