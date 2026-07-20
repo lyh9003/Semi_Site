@@ -11,7 +11,7 @@ async function fetchStock(ticker: string, range: Range, isIndex = false) {
   const interval = range === "1mo" ? "1d" : "1wk";
   const res = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=${interval}&range=${range}`,
-    { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 300 } }
+    { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 60 } }
   );
   if (!res.ok) throw new Error(`Failed to fetch ${ticker}`);
   const json = await res.json();
