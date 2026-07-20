@@ -32,9 +32,15 @@ async function fetchStock(ticker: string, range: Range, isIndex = false) {
     }))
     .filter((d) => d.price !== null);
 
+  // KST 날짜 변환
+  const toKSTDate = (ts: number) =>
+    new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
+  const todayKST = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+
   const validPoints = timestamps
-    .map((ts, i) => ({ ts, close: closes[i] }))
-    .filter((p): p is { ts: number; close: number } => p.close != null && p.close > 0);
+    .map((ts, i) => ({ ts, date: toKSTDate(ts), close: closes[i] }))
+    .filter((p): p is { ts: number; date: string; close: number } => p.close != null && p.close > 0);
+
   const lastValidTs = validPoints.length > 0 ? validPoints[validPoints.length - 1].ts : null;
   const priceDate = lastValidTs
     ? new Date(lastValidTs * 1000).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" })
@@ -43,11 +49,11 @@ async function fetchStock(ticker: string, range: Range, isIndex = false) {
   const rawPrice: number = meta.regularMarketPrice ?? 0;
   const currentPrice = isIndex ? parseFloat(rawPrice.toFixed(2)) : Math.round(rawPrice);
 
-  // meta.regularMarketChangePercent = 야후 파이낸스가 직접 계산한 당일 변동률(%)
-  // chartPreviousClose와 다름: 그건 차트 기간 시작점의 종가
-  const rawChangePercent: number | undefined = meta.regularMarketChangePercent;
-  const change = rawChangePercent !== undefined && rawChangePercent !== null
-    ? parseFloat(rawChangePercent.toFixed(2))
+  // 전일 종가: 오늘 날짜(KST)가 아닌 가장 최근 거래일 종가
+  // meta.regularMarketChangePercent는 한국 주식에서 0/undefined로 오므로 직접 계산
+  const prevClose = [...validPoints].reverse().find(p => p.date !== todayKST)?.close ?? 0;
+  const change = prevClose && rawPrice
+    ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
     : 0;
 
   return { history, currentPrice, change, priceDate, isIndex };
