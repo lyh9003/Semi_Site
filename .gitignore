@@ -19,8 +19,13 @@ dist/
 npm-debug.log*
 tsconfig.tsbuildinfo
 
-# Claude Code settings (local dev tools)
+# Claude Code / AI tool workspaces
 .claude/
+.codex/
 .mcp.json
+
+# Generated files
+*.pptx
+*_log.txt
 
 .vercel
