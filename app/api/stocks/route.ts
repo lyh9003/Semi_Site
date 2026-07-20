@@ -7,30 +7,7 @@ const TICKERS = { kospi: "^KS11", samsung: "005930.KS", hynix: "000660.KS" };
 const VALID_RANGES = ["1mo", "1y", "2y"] as const;
 type Range = typeof VALID_RANGES[number];
 
-// v7 Quote API: 현재가 + 전일 종가(공식값) → 변동률 계산 오류 없음
-async function fetchQuotes(symbols: string[]) {
-  const res = await fetch(
-    `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(","))}`,
-    { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 60 } }
-  );
-  const map = new Map<string, { currentPrice: number; change: number }>();
-  if (!res.ok) return map;
-  const json = await res.json();
-  for (const q of (json.quoteResponse?.result ?? [])) {
-    const rawPrice: number = q.regularMarketPrice ?? 0;
-    const prevClose: number = q.regularMarketPreviousClose ?? 0;
-    const isIdx: boolean = q.quoteType === "INDEX";
-    const currentPrice = isIdx ? parseFloat(rawPrice.toFixed(2)) : Math.round(rawPrice);
-    const change = prevClose && rawPrice
-      ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
-      : 0;
-    map.set(q.symbol, { currentPrice, change });
-  }
-  return map;
-}
-
-// v8 Chart API: 히스토리 (선 그래프용)
-async function fetchChart(ticker: string, range: Range, isIndex = false) {
+async function fetchStock(ticker: string, range: Range, isIndex = false) {
   const interval = range === "1mo" ? "1d" : "1wk";
   const res = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=${interval}&range=${range}`,
@@ -63,11 +40,17 @@ async function fetchChart(ticker: string, range: Range, isIndex = false) {
     ? new Date(lastValidTs * 1000).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" })
     : null;
 
-  // v7 fetch 실패 시 fallback용
   const rawPrice: number = meta.regularMarketPrice ?? 0;
-  const fallbackPrice = isIndex ? parseFloat(rawPrice.toFixed(2)) : Math.round(rawPrice);
+  const currentPrice = isIndex ? parseFloat(rawPrice.toFixed(2)) : Math.round(rawPrice);
 
-  return { history, priceDate, isIndex, fallbackPrice };
+  // meta.regularMarketChangePercent = 야후 파이낸스가 직접 계산한 당일 변동률(%)
+  // chartPreviousClose와 다름: 그건 차트 기간 시작점의 종가
+  const rawChangePercent: number | undefined = meta.regularMarketChangePercent;
+  const change = rawChangePercent !== undefined && rawChangePercent !== null
+    ? parseFloat(rawChangePercent.toFixed(2))
+    : 0;
+
+  return { history, currentPrice, change, priceDate, isIndex };
 }
 
 export async function GET(req: Request) {
@@ -80,29 +63,16 @@ export async function GET(req: Request) {
   const isMarketClosed = isKRMarketClosed(todayKST);
 
   try {
-    const [quotes, kospiChart, samsungChart, hynixChart] = await Promise.all([
-      fetchQuotes([TICKERS.kospi, TICKERS.samsung, TICKERS.hynix]),
-      fetchChart(TICKERS.kospi, range, true),
-      fetchChart(TICKERS.samsung, range),
-      fetchChart(TICKERS.hynix, range),
+    const [kospi, samsung, hynix] = await Promise.all([
+      fetchStock(TICKERS.kospi, range, true),
+      fetchStock(TICKERS.samsung, range),
+      fetchStock(TICKERS.hynix, range),
     ]);
 
-    const build = (ticker: string, chart: Awaited<ReturnType<typeof fetchChart>>) => {
-      const q = quotes.get(ticker);
-      return {
-        history: chart.history,
-        currentPrice: q?.currentPrice ?? chart.fallbackPrice,
-        change: q?.change ?? 0,
-        priceDate: chart.priceDate,
-        isIndex: chart.isIndex,
-        isMarketClosed,
-      };
-    };
-
     return NextResponse.json({
-      kospi:   build(TICKERS.kospi,   kospiChart),
-      samsung: build(TICKERS.samsung, samsungChart),
-      hynix:   build(TICKERS.hynix,   hynixChart),
+      kospi:   { ...kospi, isMarketClosed },
+      samsung: { ...samsung, isMarketClosed },
+      hynix:   { ...hynix, isMarketClosed },
     });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
