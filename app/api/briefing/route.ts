@@ -26,12 +26,22 @@ async function fetchStockSnapshot(ticker: string, name: string, isIndex = false)
     const rawPrice: number = result.meta.regularMarketPrice ?? 0;
     if (!rawPrice) return null;
 
+    const toKSTDate = (ts: number) =>
+      new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
+
+    const timestamps: number[] = result.timestamp ?? [];
+    const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
+
     const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
     const todayKST = kstNow.toISOString().slice(0, 10);
     const isMarketClosed = isKRMarketClosed(todayKST);
 
-    // Yahoo Finance가 자체 계산에 쓰는 이전 종가 기준값 사용 (직접 계산보다 정확)
-    const prevClose: number = result.meta.chartPreviousClose ?? result.meta.previousClose ?? 0;
+    const validPoints = timestamps
+      .map((ts, i) => ({ date: toKSTDate(ts), close: closes[i] }))
+      .filter((p): p is { date: string; close: number } => p.close != null && p.close > 0);
+
+    // 전일 종가 = 오늘 날짜가 아닌 가장 최근 거래일 종가
+    const prevClose = [...validPoints].reverse().find(p => p.date !== todayKST)?.close ?? 0;
     const change = prevClose && rawPrice
       ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
       : 0;
