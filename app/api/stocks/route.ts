@@ -41,31 +41,19 @@ async function fetchStock(ticker: string, range: Range, isIndex = false) {
   const rawPrice: number = meta.regularMarketPrice ?? 0;
   const currentPrice: number = isIndex ? parseFloat(rawPrice.toFixed(2)) : Math.round(rawPrice);
 
-  // 유효한 (timestamp, close) 쌍 추출
-  const validPoints = timestamps
-    .map((ts, i) => ({ ts, close: closes[i] }))
-    .filter((p): p is { ts: number; close: number } => p.close != null && p.close > 0);
-
   const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
   const todayKST = kstNow.toISOString().slice(0, 10);
   const isMarketClosed = isKRMarketClosed(todayKST);
-  const toKSTDate = (ts: number) =>
-    new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
 
-  let prevClose = 0;
-  if (validPoints.length >= 2) {
-    if (isMarketClosed) {
-      prevClose = validPoints[validPoints.length - 2].close;
-    } else {
-      const lastDate = toKSTDate(validPoints[validPoints.length - 1].ts);
-      prevClose = (lastDate === todayKST)
-        ? validPoints[validPoints.length - 2].close
-        : validPoints[validPoints.length - 1].close;
-    }
-  }
-  const change = prevClose
+  // Yahoo Finance가 자체 계산에 쓰는 이전 종가 기준값 사용 (직접 계산보다 정확)
+  const prevClose: number = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+  const change = prevClose && rawPrice
     ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
     : 0;
+
+  const validPoints = timestamps
+    .map((ts, i) => ({ ts, close: closes[i] }))
+    .filter((p): p is { ts: number; close: number } => p.close != null && p.close > 0);
   const lastValidTs = validPoints.length > 0 ? validPoints[validPoints.length - 1].ts : null;
   const priceDate = lastValidTs
     ? new Date(lastValidTs * 1000).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" })
