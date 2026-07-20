@@ -78,7 +78,7 @@ async function importNews() {
       title: values[1] || null,
       company: values[2] || null,
       link: values[3] || null,
-      content: values[4] || null,
+      // values[4] = content (컬럼 제거됨, 건너뜀)
       relevance: values[5] || null,
       keyword: values[6] || null,
       summary: values[7] || null,
