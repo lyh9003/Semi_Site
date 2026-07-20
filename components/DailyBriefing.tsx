@@ -39,12 +39,47 @@ export default function DailyBriefing() {
   const [weather, setWeather]           = useState<Weather | null>(null);
   const [causalChains, setCausalChains] = useState<string[]>([]);
   const [newAlerts, setNewAlerts]       = useState<string[]>([]);
-  const [stocks, setStocks]             = useState<(StockSnapshot | null)[]>([]);
+  const [stocks, setStocks]             = useState<StockSnapshot[]>([]);
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError]       = useState(false);
 
   const [isHtml, setIsHtml] = useState(false);
+
+  // 주가는 /api/stocks에서 직접 가져와 StockChart와 동일한 데이터 사용
+  useEffect(() => {
+    fetch("/api/stocks?range=1mo")
+      .then(r => r.json())
+      .then((d: {
+        error?: string;
+        kospi: { currentPrice: number; change: number; isMarketClosed?: boolean };
+        samsung: { currentPrice: number; change: number; isMarketClosed?: boolean };
+        hynix: { currentPrice: number; change: number; isMarketClosed?: boolean };
+      }) => {
+        if (d.error) return;
+        setStocks([
+          {
+            name: "코스피",
+            price: d.kospi.currentPrice.toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            change: d.kospi.change,
+            isMarketClosed: d.kospi.isMarketClosed,
+          },
+          {
+            name: "삼성전자",
+            price: d.samsung.currentPrice.toLocaleString("ko-KR") + "원",
+            change: d.samsung.change,
+            isMarketClosed: d.samsung.isMarketClosed,
+          },
+          {
+            name: "SK하이닉스",
+            price: d.hynix.currentPrice.toLocaleString("ko-KR") + "원",
+            change: d.hynix.change,
+            isMarketClosed: d.hynix.isMarketClosed,
+          },
+        ]);
+      })
+      .catch(() => {});
+  }, []);
 
   const loadBriefing = async (bust = false) => {
     const url = bust ? `/api/briefing?regenerate=1&t=${Date.now()}` : "/api/briefing";
@@ -53,14 +88,13 @@ export default function DailyBriefing() {
     return res.json();
   };
 
-  const applyData = (data: { briefing: string; htmlContent?: string; date: string; weather: Weather; causalChains?: string[]; newAlerts?: string[]; stocks?: (StockSnapshot | null)[] }) => {
+  const applyData = (data: { briefing: string; htmlContent?: string; date: string; weather: Weather; causalChains?: string[]; newAlerts?: string[] }) => {
     setIsHtml(!!data.htmlContent);
     setBriefing(data.htmlContent ?? data.briefing);
     setDate(data.date);
     setWeather(data.weather ?? null);
     setCausalChains(data.causalChains ?? []);
     setNewAlerts(data.newAlerts ?? []);
-    setStocks(data.stocks ?? []);
   };
 
   useEffect(() => {
@@ -97,9 +131,9 @@ export default function DailyBriefing() {
       </div>
 
       {/* 주가 요약 — 항상 최신 데이터로 표시 (HTML 내 오래된 주가는 stripStockBlock으로 제거) */}
-      {stocks.filter(Boolean).length > 0 && (
+      {stocks.length > 0 && (
         <div className="flex flex-wrap gap-x-5 gap-y-1 mb-4">
-          {stocks.filter((s): s is StockSnapshot => s !== null).map(s => {
+          {stocks.map(s => {
             const up = s.change > 0;
             const dn = s.change < 0;
             return (
