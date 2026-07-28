@@ -176,7 +176,7 @@ export async function GET(req: Request) {
     const content = await generate(dateFrom, dateTo);
     return NextResponse.json(
       { content, dateFrom, dateTo, cached: false },
-      { headers: { "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600" } }
+      { headers: { "Cache-Control": "no-store" } }  // 재생성 응답은 CDN 캐시 금지
     );
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });

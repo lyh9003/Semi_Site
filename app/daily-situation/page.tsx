@@ -366,7 +366,7 @@ function WeeklySummaryView() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async (regenerate = false) => {
-    const url = regenerate ? "/api/weekly-summary?regenerate=1" : "/api/weekly-summary";
+    const url = regenerate ? `/api/weekly-summary?regenerate=1&t=${Date.now()}` : "/api/weekly-summary";
     const res = await fetch(url, regenerate ? { cache: "no-store" } : undefined);
     if (!res.ok) throw new Error();
     const data = await res.json();
