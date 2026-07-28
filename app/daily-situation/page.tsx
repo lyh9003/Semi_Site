@@ -364,6 +364,7 @@ function WeeklySummaryView() {
   const [dateTo, setDateTo]       = useState("");
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState(false);
 
   const load = async (regenerate = false) => {
     const url = regenerate ? `/api/weekly-summary?regenerate=1&t=${Date.now()}` : "/api/weekly-summary";
@@ -381,7 +382,9 @@ function WeeklySummaryView() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    try { await load(true); } catch { /* ignore */ }
+    setRefreshError(false);
+    try { await load(true); }
+    catch { setRefreshError(true); }
     finally { setRefreshing(false); }
   };
 
@@ -400,13 +403,18 @@ function WeeklySummaryView() {
             <p className="text-sm text-slate-400 mt-1">{dateFrom} ~ {dateTo} · 7일 주간 요약</p>
           )}
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing || loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-600 rounded-lg transition-colors font-medium"
-        >
-          {refreshing ? <span className="animate-spin inline-block text-xs">⚙️</span> : "↻"} 새로고침
-        </button>
+        <div className="flex items-center gap-2">
+          {refreshError && (
+            <span className="text-xs text-red-500">생성 실패 (시간 초과) — 다시 시도하세요</span>
+          )}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-600 rounded-lg transition-colors font-medium"
+          >
+            {refreshing ? <span className="animate-spin inline-block text-xs">⚙️</span> : "↻"} {refreshing ? "생성 중... (최대 60초)" : "새로고침"}
+          </button>
+        </div>
       </div>
       <div className="px-10 pb-10">
         <StockChart />

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-export const runtime = "edge";
+// Edge Runtime 25초 제한 → Node.js 60초로 변경 (max_tokens:3500 생성에 필요)
+export const maxDuration = 60;
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
