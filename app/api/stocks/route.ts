@@ -9,9 +9,12 @@ type Range = typeof VALID_RANGES[number];
 
 async function fetchStock(ticker: string, range: Range, isIndex = false) {
   const interval = range === "1mo" ? "1d" : "1wk";
+  // cache: "no-store" — Yahoo Finance의 1mo 캐시가 ticker마다 갱신 속도가 달라
+  // SK하이닉스 등 일부 종목이 구값으로 서빙되는 문제 방지.
+  // 대신 route 응답 자체에 CDN s-maxage를 달아 Vercel이 60초마다 1회만 요청함.
   const res = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=${interval}&range=${range}`,
-    { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 60 } }
+    { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" }
   );
   if (!res.ok) throw new Error(`Failed to fetch ${ticker}`);
   const json = await res.json();
@@ -75,11 +78,10 @@ export async function GET(req: Request) {
       fetchStock(TICKERS.hynix, range),
     ]);
 
-    return NextResponse.json({
-      kospi:   { ...kospi, isMarketClosed },
-      samsung: { ...samsung, isMarketClosed },
-      hynix:   { ...hynix, isMarketClosed },
-    });
+    return NextResponse.json(
+      { kospi: { ...kospi, isMarketClosed }, samsung: { ...samsung, isMarketClosed }, hynix: { ...hynix, isMarketClosed } },
+      { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" } }
+    );
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
