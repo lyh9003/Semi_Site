@@ -7,27 +7,24 @@ const TICKERS = { kospi: "^KS11", samsung: "005930.KS", hynix: "000660.KS" };
 const VALID_RANGES = ["1mo", "1y", "2y"] as const;
 type Range = typeof VALID_RANGES[number];
 
-async function fetchStock(ticker: string, range: Range, isIndex = false) {
+// 차트 히스토리 전용 (표시용 선 그래프)
+async function fetchHistory(ticker: string, range: Range, isIndex = false) {
   const interval = range === "1mo" ? "1d" : "1wk";
-  // cache: "no-store" — Yahoo Finance의 1mo 캐시가 ticker마다 갱신 속도가 달라
-  // SK하이닉스 등 일부 종목이 구값으로 서빙되는 문제 방지.
-  // 대신 route 응답 자체에 CDN s-maxage를 달아 Vercel이 60초마다 1회만 요청함.
   const res = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=${interval}&range=${range}`,
-    { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" }
+    { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 300 } }
   );
-  if (!res.ok) throw new Error(`Failed to fetch ${ticker}`);
+  if (!res.ok) throw new Error(`history fetch failed: ${ticker}`);
   const json = await res.json();
   const result = json.chart?.result?.[0];
-  if (!result) throw new Error(`No data for ${ticker}`);
+  if (!result) throw new Error(`no history data: ${ticker}`);
 
-  const meta = result.meta;
   const timestamps: number[] = result.timestamp ?? [];
   const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
-
   const dateOptions: Intl.DateTimeFormatOptions = range === "2y"
     ? { year: "2-digit", month: "numeric", day: "numeric" }
     : { month: "numeric", day: "numeric" };
+
   const history = timestamps
     .map((ts, i) => ({
       date: new Date(ts * 1000).toLocaleDateString("ko-KR", { ...dateOptions, timeZone: "Asia/Seoul" }),
@@ -35,31 +32,48 @@ async function fetchStock(ticker: string, range: Range, isIndex = false) {
     }))
     .filter((d) => d.price !== null);
 
-  // KST 날짜 변환
+  const validTs = timestamps
+    .map((ts, i) => ({ ts, close: closes[i] }))
+    .filter((p): p is { ts: number; close: number } => p.close != null && p.close > 0);
+  const lastTs = validTs.length > 0 ? validTs[validTs.length - 1].ts : null;
+  const priceDate = lastTs
+    ? new Date(lastTs * 1000).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" })
+    : null;
+
+  return { history, priceDate, isIndex };
+}
+
+// 현재가 + 전일비 전용 — range=5d 사용
+// Yahoo Finance의 1mo 엔드포인트는 일부 한국 종목(000660.KS 등)에서
+// regularMarketPrice가 전일 종가로 고정되는 문제가 있음. 5d는 항상 최신.
+async function fetchPrice(ticker: string, isIndex: boolean, todayKST: string) {
+  const res = await fetch(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5d`,
+    { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" }
+  );
+  if (!res.ok) return { currentPrice: 0, change: 0 };
+  const json = await res.json();
+  const result = json.chart?.result?.[0];
+  if (!result) return { currentPrice: 0, change: 0 };
+
+  const meta = result.meta;
+  const timestamps: number[] = result.timestamp ?? [];
+  const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
+
   const toKSTDate = (ts: number) =>
     new Date(ts * 1000).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 10);
-  const todayKST = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-
   const validPoints = timestamps
-    .map((ts, i) => ({ ts, date: toKSTDate(ts), close: closes[i] }))
-    .filter((p): p is { ts: number; date: string; close: number } => p.close != null && p.close > 0);
-
-  const lastValidTs = validPoints.length > 0 ? validPoints[validPoints.length - 1].ts : null;
-  const priceDate = lastValidTs
-    ? new Date(lastValidTs * 1000).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" })
-    : null;
+    .map((ts, i) => ({ date: toKSTDate(ts), close: closes[i] }))
+    .filter((p): p is { date: string; close: number } => p.close != null && p.close > 0);
 
   const rawPrice: number = meta.regularMarketPrice ?? 0;
   const currentPrice = isIndex ? parseFloat(rawPrice.toFixed(2)) : Math.round(rawPrice);
-
-  // 전일 종가: 오늘 날짜(KST)가 아닌 가장 최근 거래일 종가
-  // meta.regularMarketChangePercent는 한국 주식에서 0/undefined로 오므로 직접 계산
   const prevClose = [...validPoints].reverse().find(p => p.date !== todayKST)?.close ?? 0;
   const change = prevClose && rawPrice
     ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
     : 0;
 
-  return { history, currentPrice, change, priceDate, isIndex };
+  return { currentPrice, change };
 }
 
 export async function GET(req: Request) {
@@ -72,14 +86,29 @@ export async function GET(req: Request) {
   const isMarketClosed = isKRMarketClosed(todayKST);
 
   try {
-    const [kospi, samsung, hynix] = await Promise.all([
-      fetchStock(TICKERS.kospi, range, true),
-      fetchStock(TICKERS.samsung, range),
-      fetchStock(TICKERS.hynix, range),
+    const [
+      kospiHist, samsungHist, hynixHist,
+      kospiPrice, samsungPrice, hynixPrice,
+    ] = await Promise.all([
+      fetchHistory(TICKERS.kospi,   range, true),
+      fetchHistory(TICKERS.samsung, range),
+      fetchHistory(TICKERS.hynix,   range),
+      fetchPrice(TICKERS.kospi,   true,  todayKST),
+      fetchPrice(TICKERS.samsung, false, todayKST),
+      fetchPrice(TICKERS.hynix,   false, todayKST),
     ]);
 
+    const build = (hist: typeof kospiHist, price: typeof kospiPrice) => ({
+      history:      hist.history,
+      priceDate:    hist.priceDate,
+      isIndex:      hist.isIndex,
+      currentPrice: price.currentPrice,
+      change:       price.change,
+      isMarketClosed,
+    });
+
     return NextResponse.json(
-      { kospi: { ...kospi, isMarketClosed }, samsung: { ...samsung, isMarketClosed }, hynix: { ...hynix, isMarketClosed } },
+      { kospi: build(kospiHist, kospiPrice), samsung: build(samsungHist, samsungPrice), hynix: build(hynixHist, hynixPrice) },
       { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" } }
     );
   } catch (e) {
