@@ -67,11 +67,31 @@ async function fetchPrice(ticker: string, isIndex: boolean, todayKST: string) {
     .filter((p): p is { date: string; close: number } => p.close != null && p.close > 0);
 
   const rawPrice: number = meta.regularMarketPrice ?? 0;
-  const currentPrice = isIndex ? parseFloat(rawPrice.toFixed(2)) : Math.round(rawPrice);
-  const prevClose = [...validPoints].reverse().find(p => p.date !== todayKST)?.close ?? 0;
-  const change = prevClose && rawPrice
-    ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
-    : 0;
+
+  // 날짜 내림차순 정렬
+  const sorted = [...validPoints].sort((a, b) => b.date.localeCompare(a.date));
+
+  let currentPrice: number;
+  let change: number;
+
+  if (isIndex) {
+    // 지수(^KS11): regularMarketPrice가 자정~개장 전 구간에서 전일 종가로 고정되는 stale 현상
+    // → closes 배열의 최근 두 세션으로 직접 계산
+    const latestClose = sorted[0]?.close ?? 0;
+    const prevClose = sorted[1]?.close ?? 0;
+    currentPrice = parseFloat(latestClose.toFixed(2));
+    change = prevClose && latestClose
+      ? parseFloat(((latestClose - prevClose) / prevClose * 100).toFixed(2))
+      : 0;
+  } else {
+    // 종목: regularMarketPrice = 실시간 현재가
+    // prevClose = 오늘 날짜가 아닌 가장 최근 거래일 종가
+    const prevClose = sorted.find(p => p.date !== todayKST)?.close ?? 0;
+    currentPrice = Math.round(rawPrice);
+    change = prevClose && rawPrice
+      ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
+      : 0;
+  }
 
   return { currentPrice, change };
 }

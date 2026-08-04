@@ -40,14 +40,28 @@ async function fetchStockSnapshot(ticker: string, name: string, isIndex = false)
       .map((ts, i) => ({ date: toKSTDate(ts), close: closes[i] }))
       .filter((p): p is { date: string; close: number } => p.close != null && p.close > 0);
 
-    // 전일 종가 = 오늘 날짜가 아닌 가장 최근 거래일 종가
-    const prevClose = [...validPoints].reverse().find(p => p.date !== todayKST)?.close ?? 0;
-    const change = prevClose && rawPrice
-      ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
-      : 0;
-    const price = isIndex
-      ? rawPrice.toLocaleString("ko-KR", { maximumFractionDigits: 2 })
-      : Math.round(rawPrice).toLocaleString("ko-KR");
+    const sorted = [...validPoints].sort((a, b) => b.date.localeCompare(a.date));
+
+    let price: string;
+    let change: number;
+
+    if (isIndex) {
+      // 지수: closes 배열 기준으로 계산 (regularMarketPrice stale 방지)
+      const latestClose = sorted[0]?.close ?? 0;
+      const prevClose = sorted[1]?.close ?? 0;
+      change = prevClose && latestClose
+        ? parseFloat(((latestClose - prevClose) / prevClose * 100).toFixed(2))
+        : 0;
+      price = latestClose.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
+    } else {
+      // 종목: regularMarketPrice = 실시간 현재가
+      const prevClose = sorted.find(p => p.date !== todayKST)?.close ?? 0;
+      change = prevClose && rawPrice
+        ? parseFloat(((rawPrice - prevClose) / prevClose * 100).toFixed(2))
+        : 0;
+      price = Math.round(rawPrice).toLocaleString("ko-KR");
+    }
+
     return { name, price, change, isMarketClosed };
   } catch { return null; }
 }
