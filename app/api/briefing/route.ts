@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { isKRMarketClosed } from "@/lib/holidays";
 
-export const runtime = 'edge';
+export const maxDuration = 60; // OpenAI 재생성 시 충분한 시간 확보 (Edge 25s 제한 제거)
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
