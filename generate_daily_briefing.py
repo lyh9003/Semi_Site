@@ -21,24 +21,35 @@ HDR_ANON    = {"apikey": ANON_KEY,    "Authorization": f"Bearer {ANON_KEY}"}
 HDR_SERVICE = {"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"}
 
 # ── 뉴스 폴백 조회 ─────────────────────────────────────────────────────────────
+def safe_list(r):
+    """Supabase 응답이 에러 dict이면 빈 리스트 반환 + 에러 출력"""
+    if r.status_code != 200:
+        print(f"Supabase 오류 {r.status_code}: {r.text[:200]}")
+        return []
+    data = r.json()
+    if not isinstance(data, list):
+        print(f"Supabase 비정상 응답 (dict): {str(data)[:200]}")
+        return []
+    return data
+
 def fetch_news():
     base = f"{SUPABASE_URL}/rest/v1/news?select=title,company,date,summary,keyword"
     r = httpx.get(f"{SUPABASE_URL}/rest/v1/news?select=date&order=date.desc&limit=1", headers=HDR_ANON)
-    rows = r.json()
+    rows = safe_list(r)
     if not rows: return []
     d = rows[0]["date"]
 
     for imp in [3, 2]:
         r2 = httpx.get(f"{base}&importance=eq.{imp}&date=eq.{d}&order=date.desc&limit=10", headers=HDR_ANON)
-        data = r2.json()
+        data = safe_list(r2)
         if data: return data
 
     r3 = httpx.get(f"{SUPABASE_URL}/rest/v1/news?select=date&date=lt.{d}&order=date.desc&limit=1", headers=HDR_ANON)
-    prev = r3.json()
+    prev = safe_list(r3)
     if not prev: return []
     pd = prev[0]["date"]
     r4 = httpx.get(f"{base}&importance=eq.3&date=eq.{pd}&order=date.desc&limit=10", headers=HDR_ANON)
-    return r4.json() if r4.status_code == 200 else []
+    return safe_list(r4)
 
 # ── 지식 그래프 핫 컨텍스트 ────────────────────────────────────────────────────
 def fetch_hot_context():
@@ -86,8 +97,8 @@ def fetch_stock(ticker, name, is_index=False):
 # ── 브리핑 생성 ────────────────────────────────────────────────────────────────
 def generate_briefing():
     news      = fetch_news()
-    reports   = httpx.get(f"{SUPABASE_URL}/rest/v1/stock_reports?select=title,securities_firm,date,summary&order=date.desc&limit=5", headers=HDR_ANON).json()
-    telegrams = httpx.get(f"{SUPABASE_URL}/rest/v1/telegram_messages?select=channel,summary,date_utc,sentiment&order=date_utc.desc,forward_count.desc&limit=10", headers=HDR_ANON).json()
+    reports   = safe_list(httpx.get(f"{SUPABASE_URL}/rest/v1/stock_reports?select=title,securities_firm,date,summary&order=date.desc&limit=5", headers=HDR_ANON))
+    telegrams = safe_list(httpx.get(f"{SUPABASE_URL}/rest/v1/telegram_messages?select=channel,summary,date_utc,sentiment&order=date_utc.desc,forward_count.desc&limit=10", headers=HDR_ANON))
     hot_ctx   = fetch_hot_context()
     stocks    = [
         fetch_stock("%5EKS11", "코스피", is_index=True),
